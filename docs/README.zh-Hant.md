@@ -224,6 +224,57 @@ python -m tgwatch run --config config.toml
   - `/since <10m|2h|ISO>`
   - `/export <10m|2h|ISO>`
 
+## GitHub Actions（自動每日擷取）
+
+可透過 GitHub Actions 定時執行 `tgwatch once` —— 無需本機守護程序。Fork 本倉庫，設定兩個 GitHub Secret 即可自動運作。
+
+### 所需 GitHub Secrets
+
+| Secret | 內容 | 如何產生 |
+|--------|------|----------|
+| `TGWATCH_CONFIG_TOML` | `config.toml` 的完整內容 | 直接複製貼上檔案內容 |
+| `TELEGRAM_SESSION_BASE64` | Base64 編碼的 session 檔 | 見下方步驟 |
+
+### 設定步驟
+
+1. **本機登入一次**以產生 session 檔：
+
+   ```bash
+   pip install -e .
+   cp config.example.toml config.toml
+   # 填入 api_id、api_hash、target_chat_id、tracked_user_ids 等
+   tgwatch once --config config.toml --since 1m
+   # 按提示輸入手機號碼與驗證碼
+   ```
+
+2. **編碼 session 檔**：
+
+   ```bash
+   # macOS
+   base64 -i data/tgwatch.session
+   # Linux
+   base64 data/tgwatch.session
+   ```
+
+3. **新增 Secrets**：在 fork 倉庫的 Settings → Secrets and variables → Actions → New repository secret。
+   - `TGWATCH_CONFIG_TOML`：貼上 `config.toml` 內容
+   - `TELEGRAM_SESSION_BASE64`：貼上 base64 輸出
+
+4. **完成。** 工作流每天 UTC 02:00 自動執行。也可在 Actions 頁面手動觸發，自訂時間窗（如 `48h`）。
+
+### 運作方式
+
+- 工作流從 Secrets 中還原 `config.toml` 與 session 檔
+- 執行 `tgwatch once --since 24h` 擷取最近 24 小時的訊息
+- 將 HTML 報告與 SQLite 資料庫上傳為 GitHub Actions Artifact（保留 30 天）
+- 每次執行後清理敏感檔案
+
+### 注意事項
+
+- **Session 失效**：若在 Telegram「使用中的裝置」中撤銷該 session，工作流會報錯。重新在本機執行步驟 1–3 即可。
+- **隱私**：設定與 session 檔透過 Secret 注入，不會提交至倉庫。Artifact 僅對倉庫協作者可見。
+- **無 AI 摘要**：目前工作流僅蒐集原始訊息並產生 HTML 報告。基於 LLM 的智慧摘要為後續規劃功能。
+
 ## 測試
 
 ```bash

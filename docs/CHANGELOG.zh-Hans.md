@@ -4,6 +4,9 @@
 
 > 条目按时间从新到旧排列，最新版本在最上方。每条变更都会标注对应的需求编号。
 
+## 1.3.0 — 2026-03-10
+- 新增 GitHub Actions 工作流，支持定时每日消息抓取与 Artifact 报告存储，并为 CI 环境增加非交互模式支持（REQ-20260310-001-github-actions-daily-summary）。
+
 ## 1.0.0 — 2026-02-04
 - 交付多目标监控与控制群路由，并提供本地 GUI 与控制群映射体验优化（REQ-20260202-001-multi-admin-monitoring，REQ-20260203-001-config-gui-design，REQ-20260204-003-gui-control-mapping-ux）。
 - 新增一键启动脚本与 GUI 运行控制（run/once、后台日志、Stop GUI），并修复 GUI 启动崩溃（REQ-20260203-002-gui-launcher-and-runner，REQ-20260204-001-gui-launcher-loglevel-fix，REQ-20260204-002-gui-stop-button）。

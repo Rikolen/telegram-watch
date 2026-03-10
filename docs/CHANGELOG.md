@@ -4,6 +4,9 @@
 
 > Entries are arranged from newest to oldest so the latest release notes stay at the top. Each bullet references the requirement(s) that introduced the change.
 
+## 1.3.0 — 2026-03-10
+- Added GitHub Actions workflow for scheduled daily message fetching with artifact-based report storage, plus non-interactive mode support for CI environments (REQ-20260310-001-github-actions-daily-summary).
+
 ## 1.2.1 — 2026-02-13
 - Simplified report file captions in the control chat from verbose ISO timestamps to a concise two-line format with user-configured time formatting (REQ-20260213-001-humanize-report-caption).
 

@@ -1,0 +1,91 @@
+name: Daily Telegram Summary
+
+on:
+  schedule:
+    # Runs at 02:00 UTC every day. Adjust to your timezone:
+    #   Asia/Shanghai (UTC+8) → set to 18:00 UTC previous day for 02:00 CST
+    #   America/New_York (UTC-5) → set to 07:00 UTC for 02:00 EST
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Time window to fetch (e.g., 24h, 48h, 2d)'
+        required: false
+        default: '24h'
+
+env:
+  TGWATCH_NON_INTERACTIVE: "1"
+
+jobs:
+  fetch-summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      - name: Reconstruct config.toml from secret
+        env:
+          TGWATCH_CONFIG_TOML: ${{ secrets.TGWATCH_CONFIG_TOML }}
+        run: |
+          python -c "
+          import os, sys
+          content = os.environ.get('TGWATCH_CONFIG_TOML', '')
+          if not content:
+              print('::error::TGWATCH_CONFIG_TOML secret is empty or not set')
+              sys.exit(1)
+          with open('config.toml', 'w') as f:
+              f.write(content)
+          print('config.toml written successfully')
+          "
+
+      - name: Reconstruct session file from secret
+        env:
+          TELEGRAM_SESSION_BASE64: ${{ secrets.TELEGRAM_SESSION_BASE64 }}
+        run: |
+          if [ -z "$TELEGRAM_SESSION_BASE64" ]; then
+            echo "::error::TELEGRAM_SESSION_BASE64 secret is empty or not set"
+            exit 1
+          fi
+          mkdir -p data
+          echo "$TELEGRAM_SESSION_BASE64" | base64 -d > data/tgwatch.session
+          echo "Session file restored successfully"
+
+      - name: Fetch messages
+        run: |
+          SINCE="${{ github.event.inputs.since || '24h' }}"
+          echo "Fetching messages from the last ${SINCE}"
+          python -m tgwatch once --config config.toml --since "$SINCE"
+
+      - name: Upload reports as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-report-${{ github.run_number }}
+          path: reports/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload database as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-db-${{ github.run_number }}
+          path: data/tgwatch.sqlite3
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Clean up sensitive files
+        if: always()
+        run: |
+          rm -f config.toml data/tgwatch.session
+          echo "Sensitive files cleaned up"

@@ -224,6 +224,57 @@ python -m tgwatch run --config config.toml
   - `/since <10m|2h|ISO>`
   - `/export <10m|2h|ISO>`
 
+## GitHub Actions（自動日次取得）
+
+GitHub Actions を使って `tgwatch once` をスケジュール実行できます。ローカルのデーモンは不要です。本リポジトリを Fork し、2 つの GitHub Secret を設定するだけで自動的に動作します。
+
+### 必要な GitHub Secrets
+
+| Secret | 内容 | 生成方法 |
+|--------|------|----------|
+| `TGWATCH_CONFIG_TOML` | `config.toml` の全内容 | ファイルの内容をコピー＆ペースト |
+| `TELEGRAM_SESSION_BASE64` | Base64 エンコードされた session ファイル | 以下の手順を参照 |
+
+### セットアップ手順
+
+1. **ローカルで一度ログイン**して session ファイルを生成：
+
+   ```bash
+   pip install -e .
+   cp config.example.toml config.toml
+   # api_id、api_hash、target_chat_id、tracked_user_ids などを入力
+   tgwatch once --config config.toml --since 1m
+   # 電話番号と認証コードの入力を求められます
+   ```
+
+2. **session ファイルをエンコード**：
+
+   ```bash
+   # macOS
+   base64 -i data/tgwatch.session
+   # Linux
+   base64 data/tgwatch.session
+   ```
+
+3. **Secrets を追加**：Fork 先の Settings → Secrets and variables → Actions → New repository secret。
+   - `TGWATCH_CONFIG_TOML`：`config.toml` の内容を貼り付け
+   - `TELEGRAM_SESSION_BASE64`：base64 の出力を貼り付け
+
+4. **完了。** ワークフローは毎日 UTC 02:00 に自動実行されます。Actions タブから手動で時間ウィンドウ（例：`48h`）を指定して実行することもできます。
+
+### 仕組み
+
+- ワークフローが Secrets から `config.toml` と session ファイルを復元
+- `tgwatch once --since 24h` で直近 24 時間のメッセージを取得
+- HTML レポートと SQLite データベースを GitHub Actions Artifact としてアップロード（30 日保持）
+- 実行後に機密ファイルをクリーンアップ
+
+### 注意事項
+
+- **Session の失効**：Telegram の「アクティブなセッション」から該当 session を無効にすると、ワークフローはエラーで終了します。ローカルで手順 1–3 を再実行してください。
+- **プライバシー**：設定と session ファイルは Secret から注入され、リポジトリにはコミットされません。Artifact はリポジトリのコラボレーターのみ閲覧可能です。
+- **AI 要約なし**：現在のワークフローは生メッセージの収集と HTML レポート生成のみです。LLM ベースの要約は今後の機能として計画中です。
+
 ## テスト
 
 ```bash

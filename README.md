@@ -227,6 +227,57 @@ Run mode:
   - `/since <10m|2h|ISO>`
   - `/export <10m|2h|ISO>`
 
+## GitHub Actions (Automated Daily Fetch)
+
+You can run `tgwatch once` on a daily schedule via GitHub Actions — no local daemon required. Fork this repo, set up two GitHub Secrets, and the workflow handles everything.
+
+### Required GitHub Secrets
+
+| Secret | Content | How to generate |
+|--------|---------|-----------------|
+| `TGWATCH_CONFIG_TOML` | Full contents of your `config.toml` | Copy-paste the file content |
+| `TELEGRAM_SESSION_BASE64` | Base64-encoded session file | See below |
+
+### Setup steps
+
+1. **Log in locally once** to generate the session file:
+
+   ```bash
+   pip install -e .
+   cp config.example.toml config.toml
+   # Fill in api_id, api_hash, target_chat_id, tracked_user_ids, etc.
+   tgwatch once --config config.toml --since 1m
+   # Enter phone number and verification code when prompted
+   ```
+
+2. **Encode the session file**:
+
+   ```bash
+   # macOS
+   base64 -i data/tgwatch.session
+   # Linux
+   base64 data/tgwatch.session
+   ```
+
+3. **Add secrets** in your fork: Settings → Secrets and variables → Actions → New repository secret.
+   - `TGWATCH_CONFIG_TOML`: paste your `config.toml` contents
+   - `TELEGRAM_SESSION_BASE64`: paste the base64 output
+
+4. **Done.** The workflow runs daily at 02:00 UTC. You can also trigger it manually from the Actions tab with a custom time window (e.g., `48h`).
+
+### How it works
+
+- The workflow reconstructs `config.toml` and the session file from secrets at runtime
+- Runs `tgwatch once --since 24h` to fetch the last 24 hours of messages
+- Uploads HTML reports and the SQLite database as GitHub Actions artifacts (30-day retention)
+- Cleans up sensitive files after every run
+
+### Notes
+
+- **Session expiration**: If your Telegram session is revoked (from Telegram's Active Sessions settings), the workflow will fail with a clear error. Re-run steps 1–3 locally to regenerate.
+- **Privacy**: Config and session files are injected from secrets and never committed. Artifacts are only visible to repo collaborators.
+- **No AI summarization**: This workflow collects raw messages and generates HTML reports. LLM-based summarization is a planned future feature.
+
 ## Testing
 
 Minimal unit tests cover config parsing and database schema creation:

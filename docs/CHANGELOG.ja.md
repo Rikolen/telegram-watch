@@ -4,6 +4,9 @@
 
 > 記事は新しい順に並んでいます。各項目は対応する要件番号を示します。
 
+## 1.3.0 — 2026-03-10
+- GitHub Actions ワークフローを追加し、スケジュール実行による日次メッセージ取得と Artifact ベースのレポート保存、および CI 環境向けの非対話モードをサポート（REQ-20260310-001-github-actions-daily-summary）。
+
 ## 1.0.0 — 2026-02-04
 - マルチターゲット監視とコントロールグループのルーティングを提供し、ローカル GUI とマッピング UX を改善（REQ-20260202-001-multi-admin-monitoring、REQ-20260203-001-config-gui-design、REQ-20260204-003-gui-control-mapping-ux）。
 - ワンクリック起動スクリプトと GUI ランナー操作（run/once、バックグラウンドログ、Stop GUI）を追加し、GUI 起動クラッシュを修正（REQ-20260203-002-gui-launcher-and-runner、REQ-20260204-001-gui-launcher-loglevel-fix、REQ-20260204-002-gui-stop-button）。

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shutil
 import traceback
 from dataclasses import dataclass
@@ -63,6 +64,12 @@ def _role_label(role: str) -> str:
 
 def _phone_prompt(role: str) -> str:
     label = _role_label(role)
+    if os.environ.get("TGWATCH_NON_INTERACTIVE"):
+        raise RuntimeError(
+            f"Session expired or missing for {label}. "
+            "Cannot prompt for phone in non-interactive mode. "
+            "Re-generate the session file locally and update the GitHub Secret."
+        )
     print(f"Next: log in {label}.")
     return input(f"{label} phone (or bot token): ")
 
