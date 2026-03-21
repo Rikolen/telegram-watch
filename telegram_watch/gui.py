@@ -1097,6 +1097,12 @@ function render() {
         <p>Messages are forwarded instantly. Rate limits: ${data.realtime.rate_limit_per_minute}/min, ${data.realtime.rate_limit_per_hour}/hr, ${data.realtime.rate_limit_per_day}/day. Account restrictions are possible &mdash; monitor for FloodWait errors.</p>
       </div>`
     : "";
+  const cloudSyncBanner = data.cloud_sync_warning
+    ? `<div class="warning-banner">
+        \\u26A0\\uFE0F Your data files are inside a cloud sync directory (${data.cloud_sync_warning})
+        <p>Cloud sync services can occasionally lock SQLite files, which may cause transient errors. WAL mode is enabled by default since v1.6.1 to mitigate this, but for maximum reliability consider moving data files outside the sync folder.</p>
+      </div>`
+    : "";
 
   app.innerHTML = `
     <div class="header">
@@ -1111,6 +1117,7 @@ function render() {
         <button class="button secondary" data-action="reload" data-allow-locked="true">Reload</button>
       </div>
     </div>
+    ${cloudSyncBanner}
     ${statusBlock}
     ${errorBlock}
     ${lockBanner}
@@ -2221,6 +2228,11 @@ class _GuiHandler(BaseHTTPRequestHandler):
                 "config.toml not found. Copy config.example.toml and fill it, "
                 "then reload the GUI."
             )
+        data["cloud_sync_warning"] = _detect_cloud_sync(
+            data.get("telegram", {}).get("session_file", ""),
+            data.get("storage", {}).get("db_path", ""),
+            self.server.config_path.parent,
+        )
         payload = {
             "data": data,
             "errors": errors,
@@ -2335,6 +2347,38 @@ class _GuiHandler(BaseHTTPRequestHandler):
             return {}
         raw = self.rfile.read(length)
         return json.loads(raw.decode("utf-8"))
+
+
+_CLOUD_SYNC_PATTERNS: list[tuple[str, list[str]]] = [
+    ("Dropbox", ["/Dropbox/"]),
+    ("iCloud", ["/Library/Mobile Documents/", "/iCloud/"]),
+    ("OneDrive", ["/OneDrive/"]),
+    ("Google Drive", ["/Google Drive/", "/GoogleDrive/"]),
+]
+
+
+def _detect_cloud_sync(
+    session_file: str,
+    db_path: str,
+    config_dir: Path,
+) -> str:
+    """Return comma-separated cloud service names if data paths sit inside
+    a known cloud sync directory, or empty string if none detected."""
+    paths_to_check: list[str] = []
+    for rel in (session_file, db_path):
+        if not rel:
+            continue
+        resolved = str((config_dir / rel).resolve())
+        paths_to_check.append(resolved)
+    if not paths_to_check:
+        return ""
+    detected: list[str] = []
+    for service, patterns in _CLOUD_SYNC_PATTERNS:
+        for p in paths_to_check:
+            if any(pat in p for pat in patterns):
+                detected.append(service)
+                break
+    return ", ".join(detected)
 
 
 def _load_raw_config(path: Path) -> dict[str, Any]:
