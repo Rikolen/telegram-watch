@@ -15,6 +15,7 @@ from telegram_watch.config import (
     ControlGroupConfig,
     DisplayConfig,
     NotificationConfig,
+    RealtimeConfig,
     ReportingConfig,
     StorageConfig,
     TargetGroupConfig,
@@ -64,6 +65,17 @@ def build_config(tmp_path: Path) -> Config:
         reporting=reporting,
         display=display,
         notifications=notifications,
+        realtime=RealtimeConfig(
+            push_mode="interval",
+            report_interval_minutes=120,
+            rate_limit_per_minute=20,
+            rate_limit_per_hour=200,
+            rate_limit_per_day=1000,
+            min_interval_sec=3.0,
+            media_extra_delay_sec=2.0,
+            warmup_minutes=5.0,
+            warmup_rate=5,
+        ),
     )
 
 
@@ -116,6 +128,17 @@ def build_multi_target_config(tmp_path: Path) -> Config:
         reporting=reporting,
         display=display,
         notifications=notifications,
+        realtime=RealtimeConfig(
+            push_mode="interval",
+            report_interval_minutes=120,
+            rate_limit_per_minute=20,
+            rate_limit_per_hour=200,
+            rate_limit_per_day=1000,
+            min_interval_sec=3.0,
+            media_extra_delay_sec=2.0,
+            warmup_minutes=5.0,
+            warmup_rate=5,
+        ),
     )
 
 
@@ -592,6 +615,17 @@ async def test_reply_media_caption_uses_target_scoped_alias(monkeypatch, tmp_pat
         reporting=reporting,
         display=display,
         notifications=notifications,
+        realtime=RealtimeConfig(
+            push_mode="interval",
+            report_interval_minutes=120,
+            rate_limit_per_minute=20,
+            rate_limit_per_hour=200,
+            rate_limit_per_day=1000,
+            min_interval_sec=3.0,
+            media_extra_delay_sec=2.0,
+            warmup_minutes=5.0,
+            warmup_rate=5,
+        ),
     )
 
     media_file = tmp_path / "reply.jpg"

@@ -149,7 +149,47 @@ The General topic always uses ID `1`. When topic routing is disabled, tgwatch po
 
 If you only want the General topic, you can omit `topic_target_map` and keep `topic_routing_enabled = false`.
 
-## 6. Local storage (`[storage]`)
+## 6. Realtime push mode (`[realtime]`) — EXPERIMENTAL
+
+tgwatch supports two push modes, configured via `push_mode`:
+
+- **`"interval"`** (default): collects messages during a time window and sends periodic summaries to the control chat. This is the existing behavior.
+- **`"realtime"`**: forwards each message to the control chat immediately as it arrives. Best for low-traffic groups where you want instant notifications.
+
+Field | Description | Default
+----- | ----------- | -------
+`push_mode` | `"interval"` or `"realtime"`. | `"interval"`
+`report_interval_minutes` | In realtime mode, an HTML report is still generated at this interval (minutes). Independent from `reporting.summary_interval_minutes`, which controls interval mode. | `120`
+
+### Rate protection (7-layer system)
+
+When using realtime mode, tgwatch applies a 7-layer rate protection system to stay within Telegram's limits and avoid FloodWait bans:
+
+Layer | Mechanism | Default
+----- | --------- | -------
+L1 | **Sliding window** — caps sends per minute (platform limit ~30; 33% safety margin). | 20/min
+L2 | **Minimum interval** — enforces a gap between consecutive sends, plus random jitter of +/-1 sec. | 3 sec
+L3 | **Media extra delay** — adds extra time for messages containing photos or documents. | +2 sec
+L4 | **Hourly/daily caps** — hard limits per hour and per day. | 200/hr, 1000/day
+L5 | **Exponential backoff** — on FloodWait, the wait multiplier doubles (1x -> 2x -> 4x ... 16x). | Doubles per FloodWait
+L6 | **Circuit breaker** — 3 FloodWaits within 10 min triggers a 30-min pause and a Bark alert (if configured). | 3 strikes / 10 min
+L7 | **Startup warmup** — limits send rate during the first few minutes to avoid bursting queued messages. | 5/min for 5 min
+
+Configuration parameters:
+
+Parameter | Default | Description
+--------- | ------- | -----------
+`rate_limit_per_minute` | `20` | Max messages per minute (allowed range 1-30; values above 25 trigger a warning)
+`rate_limit_per_hour` | `200` | Max messages per hour
+`rate_limit_per_day` | `1000` | Max messages per day
+`min_interval_sec` | `3.0` | Minimum seconds between consecutive sends
+`media_extra_delay_sec` | `2.0` | Extra delay (seconds) for messages containing media
+`warmup_minutes` | `5.0` | Duration of the warmup period after startup
+`warmup_rate` | `5` | Per-minute send cap during the warmup period
+
+> These defaults are conservative. Only adjust if you understand Telegram's rate limits. Exceeding them can result in temporary bans (FloodWait).
+
+## 7. Local storage (`[storage]`)
 
 Field | Description | Default
 ----- | ----------- | -------
@@ -158,7 +198,7 @@ Field | Description | Default
 
 You may leave the defaults or point them to any writable path. The `doctor` command verifies that the directories exist (or can be created) and that the DB file is writable.
 
-## 7. Reporting (`[reporting]`)
+## 8. Reporting (`[reporting]`)
 
 Field | Description | Default
 ----- | ----------- | -------
@@ -169,20 +209,20 @@ Field | Description | Default
 
 During each window, tgwatch writes the HTML report to `reports_dir`, uploads that file to the control chat, and then streams the window内的每条消息（文本 + 引用 + 媒体）到控制聊天，方便在手机端查看。Reply sections in each report include any quoted images/documents so you can see the full context without opening Telegram.
 
-## 8. Display (`[display]`)
+## 9. Display (`[display]`)
 
 Field | Description | Default
 ----- | ----------- | -------
 `show_ids` | Whether control-chat pushes append `(ID)` to aliases/usernames. | `true`
 `time_format` | Timestamp format for control-chat pushes (`strftime` syntax). In GUI, this field is a structured builder with dropdowns for year, month, day, hour, minute, second, date separator, and timezone display; existing non-builder formats are preserved as custom values with a raw text fallback. | `%Y.%m.%d %H:%M:%S (%Z)`
 
-## 9. Notifications (`[notifications]`)
+## 10. Notifications (`[notifications]`)
 
 Field | Description | Default
 ----- | ----------- | -------
 `bark_key` | Optional Bark key for push notifications. When set, reports, heartbeats, and error alerts are mirrored to your phone under the `Telegram Watch` group. | _(empty)_
 
-## 10. Validate the configuration
+## 11. Validate the configuration
 
 After editing `config.toml`, run:
 

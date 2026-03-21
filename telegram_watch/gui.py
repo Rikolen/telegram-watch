@@ -388,6 +388,24 @@ body {
   color: #7f1d1d;
 }
 
+.warning-banner {
+  padding: 18px;
+  border-radius: 16px;
+  border: 2px solid var(--accent-2);
+  background: #fef1e9;
+  color: var(--accent-2);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.warning-banner p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #7a4a1a;
+}
+
 .status {
   font-family: var(--mono);
   font-size: 12px;
@@ -454,7 +472,8 @@ const state = {
   lockMessage: "",
   migrationStatus: "",
   timeFormatParts: null,
-  timeFormatCustom: false
+  timeFormatCustom: false,
+  realtimeConfirmed: false
 };
 const runnerDefaults = {
   running: false,
@@ -1072,6 +1091,12 @@ function render() {
         </div>
       </div>`
     : "";
+  const realtimeBanner = data.realtime && data.realtime.push_mode === "realtime" && state.realtimeConfirmed
+    ? `<div class="warning-banner">
+        \\u26A0\\uFE0F Realtime mode (EXPERIMENTAL) is active
+        <p>Messages are forwarded instantly. Rate limits: ${data.realtime.rate_limit_per_minute}/min, ${data.realtime.rate_limit_per_hour}/hr, ${data.realtime.rate_limit_per_day}/day. Account restrictions are possible &mdash; monitor for FloodWait errors.</p>
+      </div>`
+    : "";
 
   app.innerHTML = `
     <div class="header">
@@ -1095,6 +1120,7 @@ function render() {
       <p>Start a one-shot fetch or keep the watcher running in the background. Closing the browser will not stop a running daemon.</p>
       ${sessionBanner}
       ${retentionNotice}
+      ${realtimeBanner}
       <div class="runner-grid">
         <div class="field">
           <label>Once Window</label>
@@ -1380,6 +1406,72 @@ function render() {
           + '</div>';
       })()}
     </section>
+
+    <section class="section">
+      <h2>Realtime Push Mode &mdash; EXPERIMENTAL</h2>
+      <p>Forward messages instantly instead of on a scheduled interval. Use with caution.</p>
+      <div class="grid">
+        <div class="field">
+          <label>Push Mode</label>
+          <select id="realtime-push-mode" data-field="realtime.push_mode">
+            <option value="interval" ${data.realtime.push_mode !== "realtime" ? "selected" : ""}>Interval</option>
+            <option value="realtime" ${data.realtime.push_mode === "realtime" ? "selected" : ""}>Realtime (Experimental)</option>
+          </select>
+        </div>
+      </div>
+      ${(() => {
+        if (data.realtime.push_mode !== "realtime" && !state.realtimeConfirmed) {
+          return '<div class="status" style="margin-top:12px;">Using scheduled interval mode. Messages are batched into periodic summary reports.</div>';
+        }
+        if (data.realtime.push_mode === "realtime" && !state.realtimeConfirmed) {
+          return '<div class="notice" style="margin-top:12px;">'
+            + '<strong>Warning: You are enabling Realtime Push Mode</strong>'
+            + '<ul style="margin:8px 0 8px 16px;padding:0;font-size:13px;color:#7a4a1a;">'
+            + '<li>This feature is <strong>experimental</strong> and behavior may change in future releases.</li>'
+            + '<li>Sending messages too frequently risks <strong>Telegram account restrictions</strong> (temporary or permanent bans).</li>'
+            + '<li>7-layer rate protection is enabled by default, but aggressive limits can still trigger FloodWait errors.</li>'
+            + '<li>Default limits: <strong>20 msgs/min</strong>, <strong>200 msgs/hr</strong>, <strong>1000 msgs/day</strong>.</li>'
+            + '<li>The circuit breaker will automatically pause sending if too many FloodWait errors are received.</li>'
+            + '<li>You are responsible for monitoring logs and adjusting limits as needed.</li>'
+            + '</ul>'
+            + '<label class="checkbox">'
+            + '<input type="checkbox" id="realtime-risk-confirm" />'
+            + 'I understand the risks and want to enable realtime mode'
+            + '</label>'
+            + '<div class="actions" style="margin-top:10px;">'
+            + '<button class="button secondary" data-action="realtime-confirm" disabled>Confirm Realtime Mode</button>'
+            + '<button class="button secondary" data-action="realtime-cancel">Cancel</button>'
+            + '</div>'
+            + '</div>';
+        }
+        return '<div class="grid" style="margin-top:16px;">'
+          + '<div class="field"><label>Rate Limit / Minute</label>'
+          + '<input data-field="realtime.rate_limit_per_minute" value="' + data.realtime.rate_limit_per_minute + '" placeholder="20" />'
+          + '<small>Max messages per minute (1\u201330)</small></div>'
+          + '<div class="field"><label>Rate Limit / Hour</label>'
+          + '<input data-field="realtime.rate_limit_per_hour" value="' + data.realtime.rate_limit_per_hour + '" placeholder="200" />'
+          + '<small>Max messages per hour</small></div>'
+          + '<div class="field"><label>Rate Limit / Day</label>'
+          + '<input data-field="realtime.rate_limit_per_day" value="' + data.realtime.rate_limit_per_day + '" placeholder="1000" />'
+          + '<small>Max messages per day</small></div>'
+          + '<div class="field"><label>Min Interval (sec)</label>'
+          + '<input data-field="realtime.min_interval_sec" value="' + data.realtime.min_interval_sec + '" placeholder="3.0" />'
+          + '<small>Minimum seconds between sends</small></div>'
+          + '<div class="field"><label>Media Extra Delay (sec)</label>'
+          + '<input data-field="realtime.media_extra_delay_sec" value="' + data.realtime.media_extra_delay_sec + '" placeholder="2.0" />'
+          + '<small>Extra delay for media messages</small></div>'
+          + '<div class="field"><label>Warmup Minutes</label>'
+          + '<input data-field="realtime.warmup_minutes" value="' + data.realtime.warmup_minutes + '" placeholder="5.0" />'
+          + '<small>Gradual ramp-up period after start</small></div>'
+          + '<div class="field"><label>Warmup Rate</label>'
+          + '<input data-field="realtime.warmup_rate" value="' + data.realtime.warmup_rate + '" placeholder="5" />'
+          + '<small>Max msgs/min during warmup</small></div>'
+          + '<div class="field"><label>Report Interval (min)</label>'
+          + '<input data-field="realtime.report_interval_minutes" value="' + data.realtime.report_interval_minutes + '" placeholder="120" />'
+          + '<small>How often to send periodic summary reports</small></div>'
+          + '</div>';
+      })()}
+    </section>
   `;
 
   document.querySelectorAll("select[data-field]").forEach((select) => {
@@ -1414,6 +1506,11 @@ function bindEvents() {
       updateRunnerUI();
       return;
     }
+    if (target.id === "realtime-risk-confirm") {
+      const confirmBtn = document.querySelector('[data-action="realtime-confirm"]');
+      if (confirmBtn) confirmBtn.disabled = !target.checked;
+      return;
+    }
     if (!target.dataset.field) return;
     const field = target.dataset.field;
     let value = target.type === "checkbox" ? target.checked : target.value;
@@ -1431,6 +1528,19 @@ function bindEvents() {
         state.timeFormatParts[unit] = target.value;
         const composed = composeTimeFormat(state.timeFormatParts);
         state.data.display.time_format = composed;
+        render();
+      }
+      return;
+    }
+    if (target.id === "realtime-push-mode") {
+      const newMode = target.value;
+      if (newMode === "realtime") {
+        state.data.realtime.push_mode = "realtime";
+        state.realtimeConfirmed = false;
+        render();
+      } else {
+        state.data.realtime.push_mode = "interval";
+        state.realtimeConfirmed = false;
         render();
       }
       return;
@@ -1562,6 +1672,17 @@ function bindEvents() {
       migrateConfig();
       return;
     }
+    if (action === "realtime-confirm") {
+      state.realtimeConfirmed = true;
+      render();
+      return;
+    }
+    if (action === "realtime-cancel") {
+      state.data.realtime.push_mode = "interval";
+      state.realtimeConfirmed = false;
+      render();
+      return;
+    }
     if (action === "tf-switch-builder") {
       event.preventDefault();
       const parsed = parseTimeFormat(state.data.display.time_format || "");
@@ -1600,6 +1721,11 @@ async function loadConfig() {
     state.status = payload.status || "";
     state.locked = Boolean(payload.locked);
     state.lockMessage = payload.lock_message || "";
+    if (payload.data && payload.data.realtime && payload.data.realtime.push_mode === "realtime") {
+      state.realtimeConfirmed = true;
+    } else {
+      state.realtimeConfirmed = false;
+    }
     const parsedTf = parseTimeFormat((payload.data && payload.data.display && payload.data.display.time_format) || "");
     if (parsedTf) {
       state.timeFormatParts = parsedTf;
@@ -2228,6 +2354,7 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     storage = raw.get("storage", {})
     display = raw.get("display", {})
     notifications = raw.get("notifications", {})
+    realtime = raw.get("realtime", {})
 
     api_hash = telegram.get("api_hash")
     data = {
@@ -2264,6 +2391,17 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "display_time_format_units": _TIME_FORMAT_UNITS,
         "notifications": {
             "bark_key": notifications.get("bark_key", ""),
+        },
+        "realtime": {
+            "push_mode": str(realtime.get("push_mode", "interval")).strip().lower(),
+            "rate_limit_per_minute": realtime.get("rate_limit_per_minute", 20),
+            "rate_limit_per_hour": realtime.get("rate_limit_per_hour", 200),
+            "rate_limit_per_day": realtime.get("rate_limit_per_day", 1000),
+            "min_interval_sec": realtime.get("min_interval_sec", 3.0),
+            "media_extra_delay_sec": realtime.get("media_extra_delay_sec", 2.0),
+            "warmup_minutes": realtime.get("warmup_minutes", 5.0),
+            "warmup_rate": realtime.get("warmup_rate", 5),
+            "report_interval_minutes": realtime.get("report_interval_minutes", 120),
         },
     }
 
@@ -2563,6 +2701,48 @@ def _validate_payload(payload: dict[str, Any], raw_existing: dict[str, Any]) -> 
     storage = payload.get("storage", {}) or {}
     display = payload.get("display", {}) or {}
     notifications = payload.get("notifications", {}) or {}
+    realtime_raw = payload.get("realtime", {}) or {}
+
+    push_mode = str(realtime_raw.get("push_mode", "interval")).strip().lower()
+    if push_mode not in ("interval", "realtime"):
+        errors.append("realtime.push_mode must be 'interval' or 'realtime'")
+        push_mode = "interval"
+
+    rt_rate_min = _coerce_int(
+        realtime_raw.get("rate_limit_per_minute", 20),
+        "realtime.rate_limit_per_minute",
+        errors,
+    ) or 20
+    rt_rate_hour = _coerce_int(
+        realtime_raw.get("rate_limit_per_hour", 200),
+        "realtime.rate_limit_per_hour",
+        errors,
+    ) or 200
+    rt_rate_day = _coerce_int(
+        realtime_raw.get("rate_limit_per_day", 1000),
+        "realtime.rate_limit_per_day",
+        errors,
+    ) or 1000
+    rt_warmup_rate = _coerce_int(
+        realtime_raw.get("warmup_rate", 5),
+        "realtime.warmup_rate",
+        errors,
+    ) or 5
+    rt_report_interval = _coerce_int(
+        realtime_raw.get("report_interval_minutes", 120),
+        "realtime.report_interval_minutes",
+        errors,
+    ) or 120
+
+    rt_min_interval = _try_float(realtime_raw.get("min_interval_sec", 3.0))
+    if rt_min_interval is None or rt_min_interval <= 0:
+        rt_min_interval = 3.0
+    rt_media_extra = _try_float(realtime_raw.get("media_extra_delay_sec", 2.0))
+    if rt_media_extra is None or rt_media_extra <= 0:
+        rt_media_extra = 2.0
+    rt_warmup_min = _try_float(realtime_raw.get("warmup_minutes", 5.0))
+    if rt_warmup_min is None or rt_warmup_min <= 0:
+        rt_warmup_min = 5.0
 
     normalized = {
         "config_version": 1.0,
@@ -2605,6 +2785,17 @@ def _validate_payload(payload: dict[str, Any], raw_existing: dict[str, Any]) -> 
         "notifications": {
             "bark_key": str(notifications.get("bark_key", "")).strip(),
         },
+        "realtime": {
+            "push_mode": push_mode,
+            "rate_limit_per_minute": rt_rate_min,
+            "rate_limit_per_hour": rt_rate_hour,
+            "rate_limit_per_day": rt_rate_day,
+            "min_interval_sec": rt_min_interval,
+            "media_extra_delay_sec": rt_media_extra,
+            "warmup_minutes": rt_warmup_min,
+            "warmup_rate": rt_warmup_rate,
+            "report_interval_minutes": rt_report_interval,
+        },
     }
 
     return errors, normalized
@@ -2635,6 +2826,19 @@ def _try_int(value: Any) -> int | None:
         return None
     try:
         return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _try_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+    if value == "":
+        return None
+    try:
+        return float(value)
     except (TypeError, ValueError):
         return None
 
@@ -2720,6 +2924,7 @@ def _render_toml(config: dict[str, Any], raw_existing: dict[str, Any]) -> str:
     reporting = config["reporting"]
     display = config["display"]
     notifications = config["notifications"]
+    realtime = config.get("realtime", {})
 
     lines.extend(
         [
@@ -2740,6 +2945,17 @@ def _render_toml(config: dict[str, Any], raw_existing: dict[str, Any]) -> str:
             "",
             "[notifications]",
             f"bark_key = {toml_string(notifications.get('bark_key', ''))}",
+            "",
+            "[realtime]",
+            f"push_mode = {toml_string(realtime.get('push_mode', 'interval'))}",
+            f"rate_limit_per_minute = {realtime.get('rate_limit_per_minute', 20)}",
+            f"rate_limit_per_hour = {realtime.get('rate_limit_per_hour', 200)}",
+            f"rate_limit_per_day = {realtime.get('rate_limit_per_day', 1000)}",
+            f"min_interval_sec = {realtime.get('min_interval_sec', 3.0)}",
+            f"media_extra_delay_sec = {realtime.get('media_extra_delay_sec', 2.0)}",
+            f"warmup_minutes = {realtime.get('warmup_minutes', 5.0)}",
+            f"warmup_rate = {realtime.get('warmup_rate', 5)}",
+            f"report_interval_minutes = {realtime.get('report_interval_minutes', 120)}",
         ]
     )
 

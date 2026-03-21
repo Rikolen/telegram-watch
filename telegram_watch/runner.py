@@ -24,6 +24,7 @@ from .config import (
 )
 from .links import build_message_link
 from .notifications import send_bark_notification
+from .rate_limiter import CircuitBrokenError, RateProtectionSuite
 from .reporting import generate_report
 from .storage import (
     DbMessage,
@@ -327,11 +328,11 @@ async def _send_reconnect_notification(
 
 
 async def run_daemon(config: Config) -> None:
+    """Run watcher daemon."""
     _purge_old_reports(
         config.reporting.reports_dir,
         config.reporting.retention_days,
     )
-    """Run watcher daemon."""
     client = _build_client(config)
     activity_tracker = _ActivityTracker()
     await _start_client(client, "primary")
@@ -341,6 +342,32 @@ async def run_daemon(config: Config) -> None:
     me = await client.get_me()
     self_user_id = int(me.id)
     logger.info("Logged in as %s", getattr(me, "username", self_user_id))
+
+    is_realtime = config.realtime.push_mode == "realtime"
+    realtime_pusher: _RealtimePusher | None = None
+
+    if is_realtime:
+        rt = config.realtime
+        rate_protection = RateProtectionSuite(
+            rate_limit_per_minute=rt.rate_limit_per_minute,
+            rate_limit_per_hour=rt.rate_limit_per_hour,
+            rate_limit_per_day=rt.rate_limit_per_day,
+            min_interval_sec=rt.min_interval_sec,
+            media_extra_delay_sec=rt.media_extra_delay_sec,
+            warmup_minutes=rt.warmup_minutes,
+            warmup_rate=rt.warmup_rate,
+        )
+        realtime_pusher = _RealtimePusher(
+            config,
+            send_client,
+            rate_protection,
+            fallback_client=fallback_client,
+        )
+        realtime_pusher.start()
+        logger.info(
+            "Realtime push mode active. %s",
+            rate_protection.get_status_summary(),
+        )
 
     summary_loops: list[_SummaryLoop] = []
     for target in config.targets:
@@ -352,6 +379,10 @@ async def run_daemon(config: Config) -> None:
             send_client,
             activity_tracker,
             fallback_client=fallback_client,
+            html_only=is_realtime,
+            interval_override_minutes=(
+                config.realtime.report_interval_minutes if is_realtime else None
+            ),
         )
         loop.start()
         summary_loops.append(loop)
@@ -367,7 +398,12 @@ async def run_daemon(config: Config) -> None:
     )
 
     for target in config.targets:
-        target_handler = _TargetHandler(config, client, target)
+        target_handler = _TargetHandler(
+            config,
+            client,
+            target,
+            realtime_queue=realtime_pusher.queue if realtime_pusher else None,
+        )
         client.add_event_handler(
             target_handler.handle,
             events.NewMessage(chats=[target.target_chat_id]),
@@ -377,6 +413,26 @@ async def run_daemon(config: Config) -> None:
         events.NewMessage(chats=list(config.control_by_chat_id.keys())),
     )
 
+    if is_realtime:
+        rt = config.realtime
+        startup_msg = (
+            "\u26a0\ufe0f [EXPERIMENTAL] Realtime mode active | "
+            f"Rate limits: {rt.rate_limit_per_minute}/min, "
+            f"{rt.rate_limit_per_hour}/hr, "
+            f"{rt.rate_limit_per_day}/day | "
+            f"Warmup: {rt.warmup_minutes:.0f} min @ {rt.warmup_rate}/min"
+        )
+        for control in config.control_groups.values():
+            try:
+                await _send_message_with_fallback(
+                    send_client,
+                    fallback_client,
+                    control.control_chat_id,
+                    startup_msg,
+                )
+            except Exception as exc:
+                logger.warning("Failed to send realtime startup message: %s", exc)
+
     heartbeat_loop.start()
     try:
         await _run_with_reconnect(client, send_client, config, fallback_client=fallback_client)
@@ -384,6 +440,8 @@ async def run_daemon(config: Config) -> None:
         await _send_error_notification(send_client, config, exc, fallback_client=fallback_client)
         raise
     finally:
+        if realtime_pusher:
+            await realtime_pusher.stop()
         await heartbeat_loop.stop()
         for loop in summary_loops:
             await loop.stop()
@@ -597,11 +655,19 @@ def _ensure_tz(dt: datetime) -> datetime:
 
 
 class _TargetHandler:
-    def __init__(self, config: Config, client: TelegramClient, target: TargetGroupConfig):
+    def __init__(
+        self,
+        config: Config,
+        client: TelegramClient,
+        target: TargetGroupConfig,
+        *,
+        realtime_queue: "asyncio.Queue[tuple[DbMessage, TargetGroupConfig]] | None" = None,
+    ):
         self.config = config
         self.client = client
         self.target = target
         self._tracked = set(target.tracked_user_ids)
+        self._realtime_queue = realtime_queue
 
     async def handle(self, event: events.NewMessage.Event) -> None:
         msg = event.message
@@ -624,6 +690,134 @@ class _TargetHandler:
             message.message_id,
             self.config.describe_user(int(message.sender_id), target=self.target),
         )
+        if self._realtime_queue is not None:
+            # Re-read the persisted message so media list is populated from DB.
+            with db_session(self.config.storage.db_path) as conn:
+                db_msgs = fetch_messages_between(
+                    conn,
+                    (int(message.sender_id),),
+                    message.date - timedelta(seconds=1),
+                    message.date + timedelta(seconds=1),
+                    chat_ids=[message.chat_id],
+                )
+            db_msg = next(
+                (m for m in db_msgs if m.message_id == message.message_id),
+                None,
+            )
+            if db_msg is not None:
+                self._realtime_queue.put_nowait((db_msg, self.target))
+
+
+class _RealtimePusher:
+    """Consumes captured messages and pushes them to control chats in realtime.
+
+    Uses ``RateProtectionSuite`` to stay within safe Telegram rate limits.
+    """
+
+    def __init__(
+        self,
+        config: Config,
+        client: TelegramClient,
+        rate_protection: RateProtectionSuite,
+        *,
+        fallback_client: TelegramClient | None = None,
+    ):
+        self.config = config
+        self.client = client
+        self.rate_protection = rate_protection
+        self._fallback_client = fallback_client
+        self.queue: asyncio.Queue[tuple[DbMessage, TargetGroupConfig]] = asyncio.Queue()
+        self._stop = asyncio.Event()
+        self._task: asyncio.Task | None = None
+
+    def start(self) -> None:
+        self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        self._stop.set()
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+    async def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                # Use a short timeout so we can check the stop flag periodically.
+                try:
+                    db_msg, target = await asyncio.wait_for(
+                        self.queue.get(), timeout=1.0,
+                    )
+                except asyncio.TimeoutError:
+                    continue
+                await self._push_message(db_msg, target)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("Realtime pusher error; will continue.")
+
+    async def _push_message(
+        self, db_msg: DbMessage, target: TargetGroupConfig,
+    ) -> None:
+        control = self.config.control_groups.get(target.control_group or "")
+        if control is None:
+            logger.warning(
+                "No control group for target '%s'; dropping realtime push.",
+                target.name,
+            )
+            return
+
+        has_media = bool(db_msg.media)
+        while True:
+            try:
+                await self.rate_protection.acquire(has_media=has_media)
+                break
+            except CircuitBrokenError as exc:
+                logger.critical(
+                    "Circuit breaker tripped — sleeping %.0f s before retry.",
+                    exc.remaining_seconds,
+                )
+                await send_bark_notification(
+                    self.config.notifications,
+                    "Rate limit circuit breaker",
+                    f"All sends blocked for {exc.remaining_seconds:.0f}s",
+                )
+                await asyncio.sleep(exc.remaining_seconds)
+
+        try:
+            reply_to = _topic_reply_id_for_message(
+                control, target.target_chat_id, db_msg,
+            )
+            text = _format_control_message(db_msg, self.config, target)
+            await _send_message_with_fallback(
+                self.client,
+                self._fallback_client,
+                control.control_chat_id,
+                text,
+                parse_mode="html",
+                reply_to=reply_to,
+            )
+            await _send_media_for_message(
+                self.client,
+                control.control_chat_id,
+                db_msg,
+                self.config,
+                target,
+                reply_to=reply_to,
+                fallback_client=self._fallback_client,
+            )
+            self.rate_protection.record_send()
+        except errors.FloodWaitError as exc:
+            self.rate_protection.record_flood_wait(exc.seconds)
+            logger.warning(
+                "FloodWait during realtime push: sleeping %ds then retrying.",
+                exc.seconds,
+            )
+            await asyncio.sleep(exc.seconds + 1)
+            # Re-enqueue for retry.
+            self.queue.put_nowait((db_msg, target))
 
 
 class _ControlHandler:
@@ -857,6 +1051,8 @@ class _SummaryLoop:
         tracker: "_ActivityTracker",
         *,
         fallback_client: TelegramClient | None = None,
+        html_only: bool = False,
+        interval_override_minutes: int | None = None,
     ):
         self.config = config
         self.target = target
@@ -867,6 +1063,8 @@ class _SummaryLoop:
         self._last_summary = utc_now()
         self._tracker = tracker
         self._fallback_client = fallback_client
+        self._html_only = html_only
+        self._interval_minutes = interval_override_minutes or target.summary_interval_minutes
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._run())
@@ -881,7 +1079,7 @@ class _SummaryLoop:
                 pass
 
     async def _run(self) -> None:
-        interval = self.target.summary_interval_minutes * 60
+        interval = self._interval_minutes * 60
         while not self._stop.is_set():
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=interval)
@@ -927,18 +1125,76 @@ class _SummaryLoop:
             self.config.reporting.reports_dir,
             self.config.reporting.retention_days,
         )
-        await _send_report_bundle(
-            self.client,
-            self.config,
-            self.control,
-            self.target,
-            messages,
-            since,
-            now,
-            report,
-            tracker=self._tracker,
-            bark_context=f"({_format_interval_label(self.target.summary_interval_minutes)})",
-            fallback_client=self._fallback_client,
+        if self._html_only:
+            await self._send_html_report_only(messages, since, now, report)
+        else:
+            await _send_report_bundle(
+                self.client,
+                self.config,
+                self.control,
+                self.target,
+                messages,
+                since,
+                now,
+                report,
+                tracker=self._tracker,
+                bark_context=f"({_format_interval_label(self._interval_minutes)})",
+                fallback_client=self._fallback_client,
+            )
+
+    async def _send_html_report_only(
+        self,
+        messages: Sequence[DbMessage],
+        since: datetime,
+        until: datetime,
+        report_path: Path,
+    ) -> None:
+        """Send only the HTML report file (skip individual messages).
+
+        Used in realtime mode where individual messages are already pushed
+        by ``_RealtimePusher``.
+        """
+        skip_html = self.control.skip_html_report
+        if skip_html:
+            logger.info(
+                "HTML report skipped for target '%s' (skip_html_report=true).",
+                self.target.name,
+            )
+            return
+        control_chat_id = self.control.control_chat_id
+        if _topic_routing_enabled(self.control):
+            await _send_topic_reports(
+                self.client,
+                self.config,
+                self.control,
+                self.target,
+                messages,
+                since,
+                until,
+                report_path.parent,
+                fallback_client=self._fallback_client,
+            )
+        else:
+            caption = _format_report_caption(
+                "Report", len(messages), since, until, self.config,
+            )
+            await _send_file_with_fallback(
+                self.client,
+                self._fallback_client,
+                control_chat_id,
+                report_path,
+                caption=caption,
+            )
+        if self._tracker:
+            self._tracker.mark_activity()
+        counts_text = _format_user_counts(messages, self.config, self.target)
+        bark_context = f"({_format_interval_label(self._interval_minutes)})"
+        title = f"Report Ready {bark_context}"
+        body = counts_text or f"{len(messages)} messages"
+        await send_bark_notification(
+            self.config.notifications,
+            title,
+            body,
         )
 
 

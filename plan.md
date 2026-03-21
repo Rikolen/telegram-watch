@@ -20,22 +20,28 @@ The core product (MTProto user-account watcher with GUI, bridge mode, topic rout
 
 ## Active Backlog
 
-No `Approved` or `Implementing` requirements. Backlog is clean.
+| REQ | Title | Status | Target Version |
+|-----|-------|--------|----------------|
+| REQ-20260320-001 | 即时推送模式 (Realtime Push Mode) | **Done** | v1.6.0 |
 
-## Inbox / Ideas
+## Current Focus
 
-`docs/inbox.md` is empty — no pending ideas in intake.
+### REQ-20260320-001: Realtime Push Mode
+- **概要**: 新增即时模式，消息到达即刻推送至控制群组，HTML 报告按独立周期汇总
+- **7 层速率防护**: 滑动窗口 / 间隔抖动 / 媒体延迟 / 长周期上限 / 指数退避 / 熔断器 / 启动冷却
+- **实现进度**:
+  - [x] REQ 审批通过，状态 → Implementing
+  - [x] Worker 1: `telegram_watch/rate_limiter.py`（速率防护模块）✅
+  - [x] Worker 2: `config.py` + `config.example.toml`（配置项）✅
+  - [x] Worker 3: `runner.py`（RealtimePusher 集成 + 启动日志）✅
+  - [x] Worker 4: 单元测试（51 new tests）✅
+  - [x] Worker 5: 配置文档（4 语言）✅
+  - [x] 收尾：CHANGELOG（4 语言）+ 版本 → v1.6.0 + 全量 144 tests pass ✅
 
-## What's Next (Suggested Priorities)
+## What's Next
 
-When new work arises, follow the existing requirements workflow (`docs/WORKFLOW.md`):
-
-1. Add ideas to `docs/inbox.md`
-2. Formalize to `docs/requests/REQ-YYYYMMDD-###-slug.md` (Status: Draft)
-3. Get approval → implement → complete
-
-Potential directions (not yet formalized):
-- **Stability**: long-running daemon stress testing, edge-case error recovery
-- **UX**: GUI improvements (theme, log viewer, real-time status dashboard)
-- **Distribution**: packaging (Homebrew, PyPI release, `.app` bundle)
-- **Integrations**: additional notification channels beyond Bark
+1. 审批 REQ-20260320-001 → 实现 → 发布 v1.6.0
+2. Potential follow-ups:
+   - GUI 中增加模式切换开关
+   - 条件触发（关键词过滤即时推送）
+   - 消息聚合模式（N 秒内的消息合并为一条推送）

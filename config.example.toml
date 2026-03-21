@@ -48,6 +48,36 @@ skip_html_report = false  # set true to only send individual messages, skip HTML
 # [control_groups.alt.topic_target_map."-1001234567899"]
 # 33333333 = 9101
 
+[realtime]
+# Push mode: "interval" (default) collects messages and sends periodic summaries.
+# "realtime" (EXPERIMENTAL) forwards each message immediately as it arrives.
+# ⚠ Realtime mode is experimental — behavior and config keys may change in future releases.
+push_mode = "interval"
+
+# In realtime mode, an HTML report is still generated at this interval (minutes).
+# Default: 120 (every 2 hours). Only applies when push_mode = "realtime".
+report_interval_minutes = 120
+
+# ── Rate Protection (realtime mode) ──────────────────────────────────
+# These defaults are conservative. Only adjust if you understand Telegram's rate limits.
+# Exceeding Telegram's limits can result in temporary bans (FloodWait).
+
+# Maximum messages the bot will send per minute / hour / day.
+rate_limit_per_minute = 20   # allowed range: 1–30; warn above 25
+rate_limit_per_hour   = 200
+rate_limit_per_day    = 1000
+
+# Minimum seconds between consecutive sends (prevents burst flooding).
+min_interval_sec      = 3.0
+
+# Extra delay (seconds) added when a message contains media (photos, files, etc.).
+media_extra_delay_sec = 2.0
+
+# Warmup: after startup, limit sends to warmup_rate per minute for warmup_minutes.
+# This avoids a burst of queued messages triggering Telegram's anti-spam.
+warmup_minutes = 5.0
+warmup_rate    = 5
+
 [storage]
 db_path = "data/tgwatch.sqlite3"
 media_dir = "data/media"
