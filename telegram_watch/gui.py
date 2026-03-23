@@ -38,21 +38,21 @@ logger = logging.getLogger(__name__)
 KEEP_SECRET = "********"
 
 _TIMEZONE_PRESET_CANDIDATES: tuple[tuple[str, str], ...] = (
-    ("UTC", "UTC"),
-    ("China - Shanghai", "Asia/Shanghai"),
-    ("China - Hong Kong", "Asia/Hong_Kong"),
-    ("Japan - Tokyo", "Asia/Tokyo"),
+    ("协调世界时 UTC", "UTC"),
+    ("中国 - 上海", "Asia/Shanghai"),
+    ("中国 - 香港", "Asia/Hong_Kong"),
+    ("日本 - 东京", "Asia/Tokyo"),
     # Include a second Japan option when supported by the local tz database.
-    ("Japan - Osaka (alias)", "Asia/Osaka"),
-    ("Korea - Seoul", "Asia/Seoul"),
-    ("US - Eastern (New York)", "America/New_York"),
-    ("US - Central (Chicago)", "America/Chicago"),
-    ("US - Pacific (Los Angeles)", "America/Los_Angeles"),
-    ("Europe - UK (London)", "Europe/London"),
-    ("Europe - Central (Paris)", "Europe/Paris"),
-    ("Europe - Central (Berlin)", "Europe/Berlin"),
-    ("Europe - Central (Madrid)", "Europe/Madrid"),
-    ("Europe - Central (Rome)", "Europe/Rome"),
+    ("日本 - 大阪", "Asia/Osaka"),
+    ("韩国 - 首尔", "Asia/Seoul"),
+    ("美国 - 东部 (纽约)", "America/New_York"),
+    ("美国 - 中部 (芝加哥)", "America/Chicago"),
+    ("美国 - 太平洋 (洛杉矶)", "America/Los_Angeles"),
+    ("欧洲 - 英国 (伦敦)", "Europe/London"),
+    ("欧洲 - 巴黎", "Europe/Paris"),
+    ("欧洲 - 柏林", "Europe/Berlin"),
+    ("欧洲 - 马德里", "Europe/Madrid"),
+    ("欧洲 - 罗马", "Europe/Rome"),
 )
 
 
@@ -72,23 +72,23 @@ def _build_timezone_presets() -> list[dict[str, str]]:
 
 _TIME_FORMAT_UNITS: dict[str, list[dict[str, str]]] = {
     "year": [
-        {"label": "4-digit (2026)", "value": "%Y"},
-        {"label": "2-digit (26)", "value": "%y"},
+        {"label": "四位数 (2026)", "value": "%Y"},
+        {"label": "两位数 (26)", "value": "%y"},
     ],
     "month": [
-        {"label": "Zero-padded (01)", "value": "%m"},
-        {"label": "No padding (1)", "value": "%-m"},
-        {"label": "Abbreviated (Jan)", "value": "%b"},
-        {"label": "Full name (January)", "value": "%B"},
+        {"label": "补零 (01)", "value": "%m"},
+        {"label": "不补零 (1)", "value": "%-m"},
+        {"label": "缩写 (Jan)", "value": "%b"},
+        {"label": "全称 (January)", "value": "%B"},
     ],
     "day": [
-        {"label": "Zero-padded (01)", "value": "%d"},
-        {"label": "No padding (1)", "value": "%-d"},
+        {"label": "补零 (01)", "value": "%d"},
+        {"label": "不补零 (1)", "value": "%-d"},
     ],
     "hour": [
-        {"label": "24h zero-padded (14)", "value": "%H"},
-        {"label": "12h zero-padded (02)", "value": "%I"},
-        {"label": "24h no padding (2)", "value": "%-H"},
+        {"label": "24小时制补零 (14)", "value": "%H"},
+        {"label": "12小时制补零 (02)", "value": "%I"},
+        {"label": "24小时制不补零 (2)", "value": "%-H"},
     ],
     "minute": [
         {"label": "Zero-padded (05)", "value": "%M"},
@@ -97,27 +97,27 @@ _TIME_FORMAT_UNITS: dict[str, list[dict[str, str]]] = {
         {"label": "Zero-padded (09)", "value": "%S"},
     ],
     "timezone": [
-        {"label": "Abbreviation (CST)", "value": "%Z"},
-        {"label": "Offset (+0800)", "value": "%z"},
+        {"label": "缩写 (CST)", "value": "%Z"},
+        {"label": "偏移量 (+0800)", "value": "%z"},
     ],
     "date_separator": [
-        {"label": "Dot (.)", "value": "."},
-        {"label": "Dash (-)", "value": "-"},
-        {"label": "Slash (/)", "value": "/"},
+        {"label": "点号 (.)", "value": "."},
+        {"label": "短横线 (-)", "value": "-"},
+        {"label": "斜杠 (/)", "value": "/"},
     ],
 }
 
 _HTML = """<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>tgwatch GUI</title>
-    <link rel="stylesheet" href="/app.css" />
+    <title>TG 监控面板</title>
+    <link rel="stylesheet" href="/app.css?v=20260323" />
   </head>
   <body>
     <div id="app"></div>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=20260323"></script>
   </body>
 </html>
 """
@@ -469,7 +469,7 @@ const runnerDefaults = {
 const keepSecret = "********";
 const LOG_MAX_LINES = 200;
 
-const limitText = (limits) => `Limits: ${limits.maxTargets} groups, ${limits.maxUsersPerTarget} users per group, ${limits.maxControlGroups} control groups.`;
+const limitText = (limits) => `限制：最多 ${limits.maxTargets} 个群组，每组 ${limits.maxUsersPerTarget} 个用户，${limits.maxControlGroups} 个控制组。`;
 
 const blankTarget = () => ({
   name: "",
@@ -553,12 +553,12 @@ const buildUserOptions = (targetUsers, selectedUsers, currentValue) => {
     options.push(`<option value="${value}">${label}</option>`);
   });
   if (currentValue && !targetUsers.some((user) => user.key === currentValue)) {
-    options.unshift(`<option value="${currentValue}">Unknown user (${currentValue})</option>`);
+    options.unshift(`<option value="${currentValue}">未知用户 (${currentValue})</option>`);
   }
   if (!options.length) {
-    options.push(`<option value="">No available users</option>`);
+    options.push(`<option value="">没有可用的用户</option>`);
   } else {
-    options.unshift(`<option value="">Select user</option>`);
+    options.unshift(`<option value="">选择用户</option>`);
   }
   return options.join("");
 };
@@ -579,7 +579,7 @@ const buildTimezoneOptions = (presets, currentValue) => {
   });
   if (!seen.has(selected)) {
     options.unshift(
-      `<option value="${selected}" selected>Custom (keep existing) - ${selected}</option>`
+      `<option value="${selected}" selected>自定义（保留现有）- ${selected}</option>`
     );
   }
   if (!options.length) {
@@ -706,7 +706,7 @@ function composeTimeFormat(parts) {
 }
 
 function buildTimeFormatDropdown(unitName, presets, currentValue, fieldId) {
-  const options = ['<option value="">Don\\u0027t display</option>'];
+  const options = ['<option value="">不显示</option>'];
   (presets || []).forEach((entry) => {
     const sel = entry.value === currentValue ? "selected" : "";
     options.push('<option value="' + entry.value + '" ' + sel + '>' + entry.label + "</option>");
@@ -734,11 +734,11 @@ function timeFormatPreview(parts) {
 }
 
 const runnerStatusText = (runner) => {
-  if (!runner) return "Checking status...";
+  if (!runner) return "正在检查状态...";
   if (runner.running) {
-    return runner.pid ? `Running (pid ${runner.pid})` : "Running";
+    return runner.pid ? `运行中 (PID ${runner.pid})` : "运行中";
   }
-  return "Not running";
+  return "未运行";
 };
 
 const runnerMessageText = () => {
@@ -767,10 +767,10 @@ function updateRunnerUI() {
       runLogEl.textContent = runLogText;
       runLogEl.classList.remove("empty");
     } else if (runner.running) {
-      runLogEl.textContent = "Waiting for logs...";
+      runLogEl.textContent = "等待日志...";
       runLogEl.classList.add("empty");
     } else {
-      runLogEl.textContent = "No active run.";
+      runLogEl.textContent = "没有正在运行的任务";
       runLogEl.classList.add("empty");
     }
   }
@@ -782,7 +782,7 @@ function updateRunnerUI() {
       onceLogEl.textContent = onceLogText;
       onceLogEl.classList.remove("empty");
     } else {
-      onceLogEl.textContent = "No recent once run.";
+      onceLogEl.textContent = "没有最近的单次运行记录";
       onceLogEl.classList.add("empty");
     }
   }
@@ -851,7 +851,7 @@ async function loadRunnerStatus() {
     }
     updateRunnerUI();
   } catch (err) {
-    state.runnerMessage = "Runner status unavailable.";
+    state.runnerMessage = "无法获取运行状态";
     updateRunnerUI();
   } finally {
     state.runnerLoading = false;
@@ -861,7 +861,7 @@ async function loadRunnerStatus() {
 async function startRun() {
   const runner = state.runner || runnerDefaults;
   if (!runner.session_ready) {
-    state.runnerMessage = "Session file not found. Please complete one terminal login first.";
+    state.runnerMessage = "未找到会话文件，请先在终端完成一次登录。";
     updateRunnerUI();
     return;
   }
@@ -875,7 +875,7 @@ async function startRun() {
       return;
     }
     if (!state.runnerRetentionConfirmed) {
-      state.runnerMessage = `Please confirm retention_days=${runner.retention_days} before starting run daemon.`;
+      state.runnerMessage = `请先确认 retention_days=${runner.retention_days} 后再启动守护进程。`;
       updateRunnerUI();
       return;
     }
@@ -907,7 +907,7 @@ async function startRunConfirmed() {
     updateRunnerUI();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.runnerMessage = `Failed to start run daemon: ${message}`;
+    state.runnerMessage = `启动守护进程失败：${message}`;
     updateRunnerUI();
   }
 }
@@ -923,7 +923,7 @@ async function stopRun() {
     updateRunnerUI();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.runnerMessage = `Failed to stop run daemon: ${message}`;
+    state.runnerMessage = `停止守护进程失败：${message}`;
     updateRunnerUI();
   }
 }
@@ -936,7 +936,7 @@ async function startOnce() {
   const target = targetInput ? targetInput.value.trim() : state.runnerTarget;
   const push = pushInput ? pushInput.checked : state.runnerPush;
   if (!since) {
-    state.runnerMessage = "Please enter a valid since window (e.g. 2h).";
+    state.runnerMessage = "请输入有效的时间窗口（如 2h）。";
     updateRunnerUI();
     return;
   }
@@ -954,7 +954,7 @@ async function startOnce() {
     updateRunnerUI();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.runnerMessage = `Failed to start once run: ${message}`;
+    state.runnerMessage = `启动单次运行失败：${message}`;
     updateRunnerUI();
   }
 }
@@ -969,11 +969,11 @@ async function stopGui() {
     const res = await fetch("/api/gui/stop", { method: "POST" });
     const payload = await res.json();
     const app = document.getElementById("app");
-    const message = payload && payload.status ? payload.status : "GUI stopped.";
-    app.innerHTML = `<div class="section"><h2>GUI stopped</h2><p>${message}</p></div>`;
+    const message = payload && payload.status ? payload.status : "面板已停止";
+    app.innerHTML = `<div class="section"><h2>面板已停止</h2><p>${message}</p></div>`;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.status = `Failed to stop GUI: ${message}`;
+    state.status = `停止面板失败：${message}`;
     render();
   }
 }
@@ -987,7 +987,7 @@ async function migrateConfig() {
     render();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.migrationStatus = `Migration failed: ${message}`;
+    state.migrationStatus = `迁移失败：${message}`;
     render();
   }
 }
@@ -1006,11 +1006,11 @@ function render() {
   const app = document.getElementById("app");
   if (!state.data) {
     const errorBlock = state.errors.length
-      ? `<div class="error"><strong>Unable to load GUI</strong><ul>${state.errors
+      ? `<div class="error"><strong>无法加载面板</strong><ul>${state.errors
           .map((e) => `<li>${e}</li>`)
           .join("")}</ul></div>`
       : "";
-    app.innerHTML = `<div class="section"><h2>Loading...</h2>${errorBlock}</div>`;
+    app.innerHTML = `<div class="section"><h2>加载中...</h2>${errorBlock}</div>`;
     return;
   }
   const data = state.data;
@@ -1024,7 +1024,7 @@ function render() {
   const oncePushChecked = state.runnerPush;
 
   const errorBlock = state.errors.length
-    ? `<div class="error"><strong>Validation issues</strong><ul>${state.errors.map(e => `<li>${e}</li>`).join("")}</ul></div>`
+    ? `<div class="error"><strong>验证问题</strong><ul>${state.errors.map(e => `<li>${e}</li>`).join("")}</ul></div>`
     : "";
 
   const noticeParts = [];
@@ -1033,10 +1033,10 @@ function render() {
   const statusBlock = noticeParts.length ? `<div class="notice">${noticeParts.join("<br />")}</div>` : "";
   const lockBanner = state.locked
     ? `<div class="lock-banner" id="lock-banner">
-        Configuration locked
-        <p>${state.lockMessage || "This config is outdated or invalid. Rewrite config.toml and reload the GUI."}</p>
+        配置已锁定
+        <p>${state.lockMessage || "当前配置已过期或无效，请重写 config.toml 并重新加载面板。"}</p>
         <div style="margin-top:12px;">
-          <button class="button danger" data-action="migrate-config" data-allow-locked="true">Migrate Config</button>
+          <button class="button danger" data-action="migrate-config" data-allow-locked="true">迁移配置</button>
         </div>
       </div>`
     : "";
@@ -1054,21 +1054,21 @@ function render() {
   const onceLog = runner.once_log || "";
   const sessionBanner = !runner.session_ready
     ? `<div class="lock-banner" style="margin-bottom:16px;">
-        Session required before running
-        <p>Run this once in terminal to login: <code>python -m tgwatch run --config config.toml</code></p>
+        运行前需要先登录会话
+        <p>请在终端运行一次以完成登录：<code>python -m tgwatch run --config config.toml</code></p>
       </div>`
     : "";
   const retentionNotice = runner.requires_retention_confirm && state.runnerRetentionPrompt
     ? `<div class="notice">
-        <strong>Retention confirmation required:</strong>
-        retention_days is set to ${runner.retention_days}. Confirm before starting run daemon.
+        <strong>需要确认数据保留设置：</strong>
+        retention_days 已设为 ${runner.retention_days}，请在启动守护进程前确认。
         <label class="checkbox">
           <input type="checkbox" id="run-retention-confirm" ${state.runnerRetentionConfirmed ? "checked" : ""} />
-          I understand long retention may consume significant disk space.
+          我了解较长的保留时间可能会占用大量磁盘空间。
         </label>
         <div class="actions" style="margin-top:10px;">
-          <button class="button secondary" data-action="run-daemon-confirm" ${state.runnerRetentionConfirmed ? "" : "disabled"}>Confirm & Start Run</button>
-          <button class="button secondary" data-action="run-daemon-cancel">Cancel</button>
+          <button class="button secondary" data-action="run-daemon-confirm" ${state.runnerRetentionConfirmed ? "" : "disabled"}>确认并启动</button>
+          <button class="button secondary" data-action="run-daemon-cancel">取消</button>
         </div>
       </div>`
     : "";
@@ -1076,14 +1076,14 @@ function render() {
   app.innerHTML = `
     <div class="header">
       <div class="hero">
-        <span class="badge">Local Configurator</span>
-        <h1>tgwatch GUI</h1>
-        <p>Configure multi-group monitoring and control routing without editing files.</p>
+        <span class="badge">本地配置器</span>
+        <h1>TG 监控面板</h1>
+        <p>配置多群组监控和消息路由，无需手动编辑配置文件。</p>
         <div class="status">${limitText(limits)}</div>
       </div>
       <div class="actions">
-        <button class="button" data-action="save">Save Config</button>
-        <button class="button secondary" data-action="reload" data-allow-locked="true">Reload</button>
+        <button class="button" data-action="save">保存配置</button>
+        <button class="button secondary" data-action="reload" data-allow-locked="true">重新加载</button>
       </div>
     </div>
     ${statusBlock}
@@ -1091,23 +1091,23 @@ function render() {
     ${lockBanner}
 
     <section class="section" id="runner-section">
-      <h2>Runner</h2>
-      <p>Start a one-shot fetch or keep the watcher running in the background. Closing the browser will not stop a running daemon.</p>
+      <h2>运行控制</h2>
+      <p>执行单次抓取或在后台持续运行监控。关闭浏览器不会停止正在运行的守护进程。</p>
       ${sessionBanner}
       ${retentionNotice}
       <div class="runner-grid">
         <div class="field">
-          <label>Once Window</label>
+          <label>时间窗口</label>
           <input id="once-since" value="${state.runnerSince}" placeholder="2h" />
-          <small>Examples: 10m, 2h, 2026-02-01T10:30Z</small>
+          <small>示例：10m、2h、2026-02-01T10:30Z</small>
         </div>
         <div class="field">
-          <label>Once Target</label>
+          <label>目标群组</label>
           <select id="once-target">
             ${(() => {
               const options = [];
               options.push(
-                `<option value="" ${selectedOnceTarget === "" ? "selected" : ""}>All targets</option>`
+                `<option value="" ${selectedOnceTarget === "" ? "selected" : ""}>全部目标</option>`
               );
               targets.forEach((target, idx) => {
                 const label = target.name || `group-${idx + 1}`;
@@ -1125,44 +1125,44 @@ function render() {
               return options.join("");
             })()}
           </select>
-          <small>Choose a single target, or leave as “All targets”.</small>
+          <small>选择单个目标，或保持”全部目标”。</small>
         </div>
         <div class="field">
-          <label>Once Push</label>
+          <label>推送报告</label>
           <label class="checkbox">
             <input type="checkbox" id="once-push" ${oncePushChecked ? "checked" : ""} />
-            Push to control chat
+            推送到控制群
           </label>
-          <small>Default is off; enable to push the once report.</small>
+          <small>默认关闭；启用后将推送单次运行的报告。</small>
         </div>
         <div class="field">
-          <label>Daemon Status</label>
+          <label>守护进程状态</label>
           <div class="status" id="runner-status">${runnerStatusText(runner)}</div>
         </div>
       </div>
       <div class="actions" style="margin-top:16px;">
-        <button class="button" data-action="run-once">Run once</button>
-        <button class="button secondary" data-action="run-daemon">Run daemon</button>
-        <button class="button secondary" data-action="run-daemon-stop" disabled>Stop daemon</button>
-        <button class="button danger" data-action="stop-gui" data-allow-locked="true">Stop GUI</button>
+        <button class="button" data-action="run-once">单次运行</button>
+        <button class="button secondary" data-action="run-daemon">启动守护进程</button>
+        <button class="button secondary" data-action="run-daemon-stop" disabled>停止守护进程</button>
+        <button class="button danger" data-action="stop-gui" data-allow-locked="true">停止面板</button>
       </div>
-      <div class="runner-footnote">Stopping the GUI will not stop a running daemon.</div>
+      <div class="runner-footnote">停止面板不会影响正在运行的守护进程。</div>
       <div class="notice" id="runner-message" style="${runnerMessage ? "" : "display:none;"}">${runnerMessage}</div>
       <div class="grid" style="margin-top:16px;">
         <div>
-          <div class="status">Run logs (live)</div>
-          <pre class="log-box ${runner.running && runLog ? "" : "empty"}" id="run-log">${runner.running ? (runLog || "Waiting for logs...") : "No active run."}</pre>
+          <div class="status">运行日志（实时）</div>
+          <pre class="log-box ${runner.running && runLog ? "" : "empty"}" id="run-log">${runner.running ? (runLog || "等待日志...") : "没有正在运行的任务"}</pre>
         </div>
         <div>
-          <div class="status">Once logs</div>
-          <pre class="log-box ${onceLog ? "" : "empty"}" id="once-log">${onceLog || "No recent once run."}</pre>
+          <div class="status">单次运行日志</div>
+          <pre class="log-box ${onceLog ? "" : "empty"}" id="once-log">${onceLog || "没有最近的单次运行记录"}</pre>
         </div>
       </div>
     </section>
 
     <section class="section">
-      <h2>Telegram Credentials</h2>
-      <p>Local-only. API hash is masked and kept on disk.</p>
+      <h2>Telegram 凭证</h2>
+      <p>仅本地使用。API Hash 已脱敏并保存在磁盘上。</p>
       <div class="grid">
         <div class="field">
           <label>API ID</label>
@@ -1173,50 +1173,50 @@ function render() {
           <input type="password" data-field="telegram.api_hash" value="${data.telegram.api_hash}" placeholder="${keepSecret}" />
         </div>
         <div class="field">
-          <label>Session File</label>
+          <label>会话文件</label>
           <input data-field="telegram.session_file" value="${data.telegram.session_file}" placeholder="data/tgwatch.session" />
         </div>
       </div>
       <div class="field" style="margin-top:16px;">
-        <label><input type="checkbox" data-field="sender.enabled" ${data.sender.enabled ? "checked" : ""}/> Enable sender account (optional)</label>
+        <label><input type="checkbox" data-field="sender.enabled" ${data.sender.enabled ? "checked" : ""}/> 启用发送者账户（可选）</label>
       </div>
       ${data.sender.enabled ? `
       <div class="grid" style="margin-top:12px;">
         <div class="field">
-          <label>Sender Session File</label>
+          <label>发送者会话文件</label>
           <input data-field="sender.session_file" value="${data.sender.session_file}" placeholder="data/tgwatch_sender.session" />
         </div>
       </div>` : ""}
     </section>
 
     <section class="section">
-      <h2>Targets</h2>
-      <p>Each target represents one monitored group or channel.</p>
+      <h2>监控目标</h2>
+      <p>每个目标代表一个被监控的群组或频道。</p>
       <div class="card-list">
         ${targets.map((target, idx) => `
         <div class="card">
           <header>
             <h3>Group ${idx + 1}</h3>
             <div class="inline-actions">
-              <button class="button secondary" data-action="add-user" data-target-index="${idx}" ${target.tracked_users.length >= limits.maxUsersPerTarget ? "disabled" : ""}>Add User</button>
-              <button class="button danger" data-action="remove-target" data-target-index="${idx}">Remove Group</button>
+              <button class="button secondary" data-action="add-user" data-target-index="${idx}" ${target.tracked_users.length >= limits.maxUsersPerTarget ? "disabled" : ""}>添加用户</button>
+              <button class="button danger" data-action="remove-target" data-target-index="${idx}">移除群组</button>
             </div>
           </header>
           <div class="grid">
             <div class="field">
-              <label>Name</label>
+              <label>名称</label>
               <input data-field="targets.${idx}.name" value="${target.name}" placeholder="group-${idx + 1}" />
             </div>
             <div class="field">
-              <label>Target Chat ID</label>
+              <label>目标群组 ID</label>
               <input data-field="targets.${idx}.target_chat_id" value="${target.target_chat_id}" placeholder="-100..." />
             </div>
             <div class="field">
-              <label>Report Interval (min)</label>
+              <label>报告间隔（分钟）</label>
               <input data-field="targets.${idx}.summary_interval_minutes" value="${target.summary_interval_minutes}" placeholder="optional" />
             </div>
             <div class="field">
-              <label>Control Group</label>
+              <label>控制组</label>
               <select data-field="targets.${idx}.control_group">
                 <option value="">${defaultControlLabel}</option>
                 ${controlOptions}
@@ -1226,55 +1226,55 @@ function render() {
           <div class="list" style="margin-top:16px;">
             ${target.tracked_users.map((user, uidx) => `
             <div class="list-row">
-              <input data-field="targets.${idx}.tracked_users.${uidx}.id" value="${user.id}" placeholder="User ID" />
-              <input data-field="targets.${idx}.tracked_users.${uidx}.alias" value="${user.alias}" placeholder="Alias (optional)" />
-              <button class="button secondary" data-action="remove-user" data-target-index="${idx}" data-user-index="${uidx}">Remove</button>
+              <input data-field="targets.${idx}.tracked_users.${uidx}.id" value="${user.id}" placeholder="用户 ID" />
+              <input data-field="targets.${idx}.tracked_users.${uidx}.alias" value="${user.alias}" placeholder="别名（可选）" />
+              <button class="button secondary" data-action="remove-user" data-target-index="${idx}" data-user-index="${uidx}">移除</button>
             </div>`).join("")}
           </div>
         </div>`).join("")}
       </div>
       <div style="margin-top:16px;">
-        <button class="button secondary" data-action="add-target" ${targets.length >= limits.maxTargets ? "disabled" : ""}>Add Group</button>
+        <button class="button secondary" data-action="add-target" ${targets.length >= limits.maxTargets ? "disabled" : ""}>添加群组</button>
       </div>
     </section>
 
     <section class="section">
-      <h2>Control Groups</h2>
-      <p>Where summaries and commands are delivered.</p>
+      <h2>控制组</h2>
+      <p>汇总报告和命令的接收群组。</p>
       <div class="card-list">
         ${controlGroups.map((group, idx) => `
         <div class="card">
           <header>
             <h3>Control ${idx + 1}</h3>
             <div class="inline-actions">
-              <button class="button danger" data-action="remove-control" data-control-index="${idx}">Remove</button>
+              <button class="button danger" data-action="remove-control" data-control-index="${idx}">移除</button>
             </div>
           </header>
           <div class="grid">
             <div class="field">
-              <label>Key</label>
+              <label>标识</label>
               <input data-field="control_groups.${idx}.key" value="${group.key}" placeholder="main" />
             </div>
             <div class="field">
-              <label>Control Chat ID</label>
+              <label>控制群 ID</label>
               <input data-field="control_groups.${idx}.control_chat_id" value="${group.control_chat_id}" placeholder="-100..." />
             </div>
             <div class="field">
-              <label>Forum Mode</label>
+              <label>论坛模式</label>
               <select data-field="control_groups.${idx}.is_forum">
                 <option value="false" ${group.is_forum ? "" : "selected"}>false</option>
                 <option value="true" ${group.is_forum ? "selected" : ""}>true</option>
               </select>
             </div>
             <div class="field">
-              <label>Topic Routing</label>
+              <label>话题路由</label>
               <select data-field="control_groups.${idx}.topic_routing_enabled">
                 <option value="false" ${group.topic_routing_enabled ? "" : "selected"}>false</option>
                 <option value="true" ${group.topic_routing_enabled ? "selected" : ""}>true</option>
               </select>
             </div>
             <div class="field">
-              <label>Skip HTML Report</label>
+              <label>跳过 HTML 报告</label>
               <select data-field="control_groups.${idx}.skip_html_report">
                 <option value="false" ${group.skip_html_report ? "" : "selected"}>false</option>
                 <option value="true" ${group.skip_html_report ? "selected" : ""}>true</option>
@@ -1282,9 +1282,9 @@ function render() {
             </div>
           </div>
           <div class="status" style="margin-top:12px;">
-            Mapped targets: ${(() => {
+            已映射的目标： ${(() => {
               const mapped = mapTargetsToControl(targets, controlGroups, group.key);
-              return mapped.length ? mapped.join(", ") : "none yet";
+              return mapped.length ? mapped.join(", ") : "暂无";
             })()}
           </div>
           ${group.topic_routing_enabled ? `
@@ -1294,89 +1294,89 @@ function render() {
               <select data-field="control_groups.${idx}.topic_target_map.${eidx}.user_key">
                 ${buildUserOptions(targetUsers, selectedUsers, entryKey(entry))}
               </select>
-              <input data-field="control_groups.${idx}.topic_target_map.${eidx}.topic_id" value="${entry.topic_id}" placeholder="Topic ID" />
-              <button class="button secondary" data-action="remove-topic" data-control-index="${idx}" data-topic-index="${eidx}">Remove</button>
+              <input data-field="control_groups.${idx}.topic_target_map.${eidx}.topic_id" value="${entry.topic_id}" placeholder="话题 ID" />
+              <button class="button secondary" data-action="remove-topic" data-control-index="${idx}" data-topic-index="${eidx}">移除</button>
             </div>`).join("")}
           </div>
           <div style="margin-top:12px;">
-            <button class="button secondary" data-action="add-topic" data-control-index="${idx}">Add Topic Mapping</button>
+            <button class="button secondary" data-action="add-topic" data-control-index="${idx}">添加话题映射</button>
           </div>` : ""}
         </div>`).join("")}
       </div>
       <div style="margin-top:16px;">
-        <button class="button secondary" data-action="add-control" ${controlGroups.length >= limits.maxControlGroups ? "disabled" : ""}>Add Control Group</button>
+        <button class="button secondary" data-action="add-control" ${controlGroups.length >= limits.maxControlGroups ? "disabled" : ""}>添加控制组</button>
       </div>
     </section>
 
     <section class="section">
-      <h2>Storage & Reporting</h2>
+      <h2>存储和报告</h2>
       <div class="grid">
         <div class="field">
-          <label>DB Path</label>
+          <label>数据库路径</label>
           <input data-field="storage.db_path" value="${data.storage.db_path}" />
         </div>
         <div class="field">
-          <label>Media Dir</label>
+          <label>媒体目录</label>
           <input data-field="storage.media_dir" value="${data.storage.media_dir}" />
         </div>
         <div class="field">
-          <label>Reports Dir</label>
+          <label>报告目录</label>
           <input data-field="reporting.reports_dir" value="${data.reporting.reports_dir}" />
         </div>
         <div class="field">
-          <label>Default Summary Interval</label>
+          <label>默认汇总间隔</label>
           <input data-field="reporting.summary_interval_minutes" value="${data.reporting.summary_interval_minutes}" />
         </div>
         <div class="field">
-          <label>Timezone</label>
+          <label>时区</label>
           <select data-field="reporting.timezone">
             ${buildTimezoneOptions(timezonePresets, data.reporting.timezone)}
           </select>
-          <small>Saved as IANA timezone string (for example Asia/Shanghai).</small>
+          <small>保存为 IANA 时区字符串（如 Asia/Shanghai）。</small>
         </div>
         <div class="field">
-          <label>Retention Days</label>
+          <label>数据保留天数</label>
           <input data-field="reporting.retention_days" value="${data.reporting.retention_days}" />
         </div>
       </div>
     </section>
 
     <section class="section">
-      <h2>Display & Notifications</h2>
+      <h2>显示和通知</h2>
       <div class="grid">
         <div class="field">
-          <label>Show IDs</label>
+          <label>显示 ID</label>
           <select data-field="display.show_ids">
             <option value="true" ${data.display.show_ids ? "selected" : ""}>true</option>
             <option value="false" ${data.display.show_ids ? "" : "selected"}>false</option>
           </select>
         </div>
         <div class="field">
-          <label>Bark Key</label>
+          <label>Bark 推送密钥</label>
           <input data-field="notifications.bark_key" value="${data.notifications.bark_key}" placeholder="optional" />
         </div>
       </div>
       ${(() => {
         const tfUnits = data.display_time_format_units || {};
         if (state.timeFormatCustom || !state.timeFormatParts) {
-          return '<div style="margin-top:16px;"><div class="field"><label>Time Format (custom)</label><input data-field="display.time_format" value="' + (data.display.time_format || "") + '" /><small><a href="#" data-action="tf-switch-builder">Switch to builder</a></small></div></div>';
+          return '<div style="margin-top:16px;"><div class="field"><label>时间格式（自定义）</label><input data-field="display.time_format" value="' + (data.display.time_format || "") + '" /><small><a href="#" data-action="tf-switch-builder">切换到构建器</a></small></div></div>';
         }
         const p = state.timeFormatParts;
         const hasMultiDate = [p.year, p.month, p.day].filter(Boolean).length > 1;
-        return '<div style="margin-top:16px;"><label style="font-weight:600;margin-bottom:8px;display:block;">Time Format</label>'
+        return '<div style="margin-top:16px;"><label style="font-weight:600;margin-bottom:8px;display:block;">时间格式</label>'
           + '<div class="grid">'
-          + '<div class="field"><label>Year</label>' + buildTimeFormatDropdown("year", tfUnits.year, p.year, "tf-year") + '</div>'
-          + '<div class="field"><label>Month</label>' + buildTimeFormatDropdown("month", tfUnits.month, p.month, "tf-month") + '</div>'
-          + '<div class="field"><label>Day</label>' + buildTimeFormatDropdown("day", tfUnits.day, p.day, "tf-day") + '</div>'
-          + (hasMultiDate ? '<div class="field"><label>Date Separator</label>' + buildTimeFormatDropdown("dateSep", tfUnits.date_separator, p.dateSep, "tf-datesep") + '</div>' : '')
-          + '<div class="field"><label>Hour</label>' + buildTimeFormatDropdown("hour", tfUnits.hour, p.hour, "tf-hour") + '</div>'
-          + '<div class="field"><label>Minute</label>' + buildTimeFormatDropdown("minute", tfUnits.minute, p.minute, "tf-minute") + '</div>'
-          + '<div class="field"><label>Second</label>' + buildTimeFormatDropdown("second", tfUnits.second, p.second, "tf-second") + '</div>'
-          + '<div class="field"><label>Timezone</label>' + buildTimeFormatDropdown("timezone", tfUnits.timezone, p.timezone, "tf-timezone") + '</div>'
+          + '<div class="field"><label>年</label>' + buildTimeFormatDropdown("year", tfUnits.year, p.year, "tf-year") + '</div>'
+          + '<div class="field"><label>月</label>' + buildTimeFormatDropdown("month", tfUnits.month, p.month, "tf-month") + '</div>'
+          + '<div class="field"><label>日</label>' + buildTimeFormatDropdown("day", tfUnits.day, p.day, "tf-day") + '</div>'
+          + (hasMultiDate ? '<div class="field"><label>日期分隔符</label>' + buildTimeFormatDropdown("dateSep", tfUnits.date_separator, p.dateSep, "tf-datesep") + '</div>' : '')
+          + '<div class="field"><label>时</label>' + buildTimeFormatDropdown("hour", tfUnits.hour, p.hour, "tf-hour") + '</div>'
+          + '<div class="field"><label>分</label>' + buildTimeFormatDropdown("minute", tfUnits.minute, p.minute, "tf-minute") + '</div>'
+          + '<div class="field"><label>秒</label>' + buildTimeFormatDropdown("second", tfUnits.second, p.second, "tf-second") + '</div>'
+          + '<div class="field"><label>时区</label>' + buildTimeFormatDropdown("timezone", tfUnits.timezone, p.timezone, "tf-timezone") + '</div>'
           + '</div>'
           + '<div style="margin-top:12px;"><small>Preview: <strong style="font-family:var(--mono);color:var(--accent);">' + timeFormatPreview(p) + '</strong></small>'
           + '&nbsp;&nbsp;<small>Format: <code style="font-size:12px;color:var(--muted);">' + composeTimeFormat(p) + '</code></small></div>'
-          + '<small><a href="#" data-action="tf-switch-custom">Edit as raw strftime string</a></small>'
+          + '<small><a href="#" data-action="tf-switch-custom">编辑原始 strftime 字符串</a></small>'
           + '</div>';
       })()}
     </section>
@@ -1610,10 +1610,10 @@ async function loadConfig() {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.errors = [`Failed to load config: ${message}`];
+    state.errors = [`加载配置失败：${message}`];
     state.status = "";
     state.locked = true;
-    state.lockMessage = "GUI failed to load config. Reload the page or restart the GUI.";
+    state.lockMessage = "面板加载配置失败，请刷新页面或重启面板。";
   }
   render();
   updateRunnerUI();
@@ -1634,7 +1634,7 @@ async function saveConfig() {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.errors = [`Failed to save config: ${message}`];
+    state.errors = [`保存配置失败：${message}`];
     state.status = "";
   }
   render();
