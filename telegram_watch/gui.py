@@ -2572,7 +2572,12 @@ class _GuiHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
     def log_message(self, format: str, *args) -> None:  # noqa: A003
-        logger.info("GUI %s - %s", self.address_string(), format % args)
+        msg = format % args
+        # Suppress noisy status-poll logs (every 2s) to DEBUG.
+        if "/api/runner/status" in msg:
+            logger.debug("GUI %s - %s", self.address_string(), msg)
+        else:
+            logger.info("GUI %s - %s", self.address_string(), msg)
 
     def _handle_get_config(self) -> None:
         errors: list[str] = []
