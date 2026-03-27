@@ -87,7 +87,7 @@ class _Window:
 
     def _purge(self, now: float) -> None:
         cutoff = now - self.span_seconds
-        while self.timestamps and self.timestamps[0] < cutoff:
+        while self.timestamps and self.timestamps[0] <= cutoff:
             self.timestamps.popleft()
 
     def is_full(self, now: float) -> bool:
@@ -174,7 +174,7 @@ class _JitteredDelay:
             return
         now = time.monotonic()
         jitter = random.uniform(-1.0, 1.0)
-        required_gap = max(0.0, self._min_interval + jitter)
+        required_gap = max(self._min_interval, self._min_interval + jitter)
         elapsed = now - self._last_send
         if elapsed < required_gap:
             wait = required_gap - elapsed
