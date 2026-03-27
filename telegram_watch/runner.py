@@ -7,6 +7,7 @@ import logging
 import os
 import shutil
 import sqlite3
+import time
 import traceback
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -291,11 +292,17 @@ async def _run_with_reconnect(
     """Run ``client.run_until_disconnected()`` with auto-reconnect on network errors."""
     delay = _RECONNECT_INITIAL_DELAY
     sqlite_retries = 0
+    _last_sqlite_error: float | None = None
+    _SQLITE_BURST_WINDOW = 30.0  # reset counter if errors are > 30s apart
     while True:
         try:
             await client.run_until_disconnected()
             return  # graceful disconnect
         except sqlite3.OperationalError as exc:
+            now = time.monotonic()
+            if _last_sqlite_error is not None and (now - _last_sqlite_error) > _SQLITE_BURST_WINDOW:
+                sqlite_retries = 0  # sporadic error, not a burst
+            _last_sqlite_error = now
             sqlite_retries += 1
             if sqlite_retries > _SQLITE_MAX_RETRIES:
                 logger.error(
@@ -777,7 +784,7 @@ class _RealtimePusher:
     _MAX_RETRIES = 3
 
     async def _run(self) -> None:
-        retry_counts: dict[int, int] = {}  # message_id -> attempts
+        retry_counts: dict[tuple[int, int], int] = {}  # (chat_id, message_id) -> attempts
         while not self._stop.is_set():
             try:
                 # Use a short timeout so we can check the stop flag periodically.
@@ -787,26 +794,27 @@ class _RealtimePusher:
                     )
                 except asyncio.TimeoutError:
                     continue
+                msg_key = (db_msg.chat_id, db_msg.message_id)
                 try:
                     await self._push_message(db_msg, target)
-                    retry_counts.pop(db_msg.message_id, None)
+                    retry_counts.pop(msg_key, None)
                 except errors.FloodWaitError:
                     # Already handled inside _push_message (re-enqueued there).
                     pass
                 except Exception:
-                    attempts = retry_counts.get(db_msg.message_id, 0) + 1
+                    attempts = retry_counts.get(msg_key, 0) + 1
                     if attempts < self._MAX_RETRIES:
-                        retry_counts[db_msg.message_id] = attempts
+                        retry_counts[msg_key] = attempts
                         logger.warning(
-                            "Realtime push failed for msg %s (attempt %d/%d); will retry.",
-                            db_msg.message_id, attempts, self._MAX_RETRIES,
+                            "Realtime push failed for msg %s:%s (attempt %d/%d); will retry.",
+                            db_msg.chat_id, db_msg.message_id, attempts, self._MAX_RETRIES,
                         )
                         self.queue.put_nowait((db_msg, target))
                     else:
-                        retry_counts.pop(db_msg.message_id, None)
+                        retry_counts.pop(msg_key, None)
                         logger.exception(
-                            "Realtime push failed for msg %s after %d attempts; dropping.",
-                            db_msg.message_id, self._MAX_RETRIES,
+                            "Realtime push failed for msg %s:%s after %d attempts; dropping.",
+                            db_msg.chat_id, db_msg.message_id, self._MAX_RETRIES,
                         )
             except asyncio.CancelledError:
                 break
