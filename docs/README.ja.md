@@ -2,7 +2,7 @@
 
 [English](../README.md) | [简体中文](README.zh-Hans.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md)
 
-**ドキュメント版:** `v1.0.5`（release `v1.5.0`）
+**ドキュメント版:** `v1.0.6`（release `v1.6.0`）
 
 フォロー: [X/Twitter](https://x.com/o1xhack) · [Telegram 英語チャンネル](https://t.me/lalabeng) · [Telegram 中文チャンネル](https://t.me/o1xinsight)
 
@@ -15,12 +15,13 @@
 - **マルチターゲット監視**：複数グループ/チャンネルを同時監視し、ターゲットごとに監視対象・別名・集計間隔を個別設定。
 - **コントロールグループ振り分け**：各ターゲットを指定コントロールグループへルーティングし、運用導線を分離。
 - **ターゲット単位 Topic マッピング**：フォーラムモードで `target_chat_id + user_id` を Topic ID に対応付け、同一ユーザー ID でも元グループごとに別 Topic へ送信。
-- **GUI 優先の設定体験**：認証情報、ターゲット、コントロールグループ、マッピング、保存先をローカル GUI から管理。
+- **GUI 優先の設定体験**：認証情報、ターゲット、コントロールグループ、マッピング、保存先をローカル GUI から管理。ブラウザ言語に基づき中国語・英語を自動切替。
 - **ワンクリック起動**：Conda（`tgwatch`）優先で起動し、利用不可時は自動で `venv` にフォールバック。
 - **GUI ランナー制御**：Run once（単一ターゲット選択・push 任意）、Run daemon、Stop daemon、ライブログ確認を一画面で実行。
 - **安全な実行ガード**：session 事前チェック、長期保持時の確認フロー、GUI 上の明示的なエラーメッセージ。
 - **自動再接続**：daemon モードで一時的なネットワーク障害発生時に指数バックオフで自動再接続し、復旧後コントロールチャットに通知を送信。
 - **ローカル永続化**：メッセージを SQLite に保存し、メディアをスナップショット化して HTML レポートを生成。
+- **リアルタイムプッシュモード** *（実験的）*：追跡対象ユーザーのメッセージを受信即座にコントロールチャットへ転送。7 層レート保護システムでアカウント制限を防止。
 - **プライバシー重視設計**：クラウド依存なし、機密値のログ出力なし、実行時の機密ファイルは git 対象外。
 
 コミュニティ運営、調査、トレードなど **シグナル抽出 + ローカルアーカイブ** が必要な人に最適。
@@ -38,7 +39,7 @@
 安定版リリースをクローン（推奨）：
 
 ```bash
-git clone --branch v1.5.0 https://github.com/o1xhack/telegram-watch.git
+git clone --branch v1.6.0 https://github.com/o1xhack/telegram-watch.git
 cd telegram-watch
 ```
 
@@ -110,7 +111,7 @@ pip install -e .
 **タグ版インストール（安定・バージョン固定）：**
 
 ```bash
-pip install "git+https://github.com/o1xhack/telegram-watch.git@v1.5.0"
+pip install "git+https://github.com/o1xhack/telegram-watch.git@v1.6.0"
 ```
 
 ### 設定と実行
@@ -146,6 +147,8 @@ tgwatch run          # デーモンを起動
 | `storage` | `db_path`、`media_dir` | ローカルストレージパス |
 | `notifications` | `bark_key` | 任意の Bark プッシュ通知 |
 | `display` | `show_ids`、`time_format` | 表示フォーマット |
+| `realtime` | `push_mode` | `"interval"`（デフォルト）または `"realtime"`（実験的） |
+| `realtime` | `rate_limit_per_minute`、`rate_limit_per_hour`、`rate_limit_per_day` | レート保護制限 |
 
 単一ターゲット構成は従来どおり `[target]` + `[control]` でも動作します。
 
@@ -171,6 +174,16 @@ tgwatch once --config config.toml --since 2h --target -1001234567890
 1. Bark アプリをインストールし、歯車 → デバイスキーをコピー。
 2. 設定に追加：`[notifications]` → `bark_key = "あなたのKey"`（または GUI で設定）。
 3. レポート、ハートビート、エラーが「Telegram Watch」グループで Bark に届きます。
+
+### リアルタイムプッシュモード *（実験的）*
+
+デフォルトでは、tgwatch はメッセージを収集して定期的にまとめて送信します（「interval」モード）。**リアルタイムモード**はメッセージ到着と同時にコントロールチャットへ転送します。
+
+1. GUI の **Realtime Push Mode** セクションで **Realtime (Experimental)** に切り替え。
+2. リスク確認ダイアログを承認（レート制限を超えるとアカウント制限の可能性があります）。
+3. 必要に応じてレート保護設定を調整 — デフォルト値は控えめに設定されています。
+
+リアルタイムモードには **7 層レート保護**が組み込まれています：スライディングウィンドウ（20 件/分）、ジッター付き遅延（3 秒 ± 1 秒）、メディア追加遅延（+2 秒）、時間/日次上限（200/時、1000/日）、FloodWait 指数バックオフ、サーキットブレーカー（30 分自動停止 + Bark 通知）、起動ウォームアップ（5 分 @ 5 件/分）。詳細は[設定ガイド](configuration.ja.md)を参照してください。
 
 > ⚠️ `config.toml`、セッションファイル、`data/`、`reports/` など機密情報は Git へコミットしないでください。
 

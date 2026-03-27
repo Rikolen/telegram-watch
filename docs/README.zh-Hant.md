@@ -2,7 +2,7 @@
 
 [English](../README.md) | [简体中文](README.zh-Hans.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md)
 
-**文件版本：** `v1.0.5`（release `v1.5.0`）
+**文件版本：** `v1.0.6`（release `v1.6.0`）
 
 追蹤： [X/Twitter](https://x.com/o1xhack) · [Telegram 英文頻道](https://t.me/lalabeng) · [Telegram 中文頻道](https://t.me/o1xinsight)
 
@@ -15,12 +15,13 @@
 - **多目標監控**：可同時追蹤多個群/頻道，每個目標可獨立設定名單、別名與彙整間隔。
 - **控制群路由**：每個目標可綁定到指定控制群，便於按場景拆分工作流程。
 - **按目標 Topic 映射**：在論壇模式下以 `target_chat_id + user_id` 映射 Topic，同一使用者在不同來源群可走不同 Topic。
-- **GUI 優先設定**：憑證、目標、控制群、映射與儲存都可在本機 GUI 完成。
+- **GUI 優先設定**：憑證、目標、控制群、映射與儲存都可在本機 GUI 完成——依據瀏覽器語言自動切換中文或英文介面。
 - **一鍵本機啟動器**：啟動流程採 Conda（`tgwatch`）優先，並自動回退到 `venv`。
 - **GUI 執行控制**：支援 Run once（可選單目標與 push）、Run daemon、Stop daemon，並可查看即時日誌。
 - **安全執行護欄**：啟動前 session 檢查、長保留視窗確認，以及介面內可見錯誤提示。
 - **自動重連**：daemon 模式在臨時網路故障時自動重連（指數退避），恢復後向控制群發送通知。
 - **預設本機持久化**：訊息歸檔至 SQLite、媒體快照落盤、自動產生 HTML 報告。
+- **即時推送模式** *（實驗性）*：被追蹤使用者的訊息到達後立即轉發至控制群組，內建 7 層速率防護體系，防止帳號受限。
 - **隱私優先設計**：不依賴雲端、不記錄敏感金鑰，執行期敏感檔預設不進 git。
 
 適用情境：社群營運、研究人員、交易者，或任何需要 **信號萃取 + 本機歸檔** 的人。
@@ -38,7 +39,7 @@
 複製穩定 release 版本（推薦）：
 
 ```bash
-git clone --branch v1.5.0 https://github.com/o1xhack/telegram-watch.git
+git clone --branch v1.6.0 https://github.com/o1xhack/telegram-watch.git
 cd telegram-watch
 ```
 
@@ -110,7 +111,7 @@ pip install -e .
 **標記版安裝（穩定、版本固定）：**
 
 ```bash
-pip install "git+https://github.com/o1xhack/telegram-watch.git@v1.5.0"
+pip install "git+https://github.com/o1xhack/telegram-watch.git@v1.6.0"
 ```
 
 ### 設定與執行
@@ -146,6 +147,8 @@ tgwatch run          # 啟動常駐模式
 | `storage` | `db_path`、`media_dir` | 本機儲存路徑 |
 | `notifications` | `bark_key` | 可選 Bark 手機推播 |
 | `display` | `show_ids`、`time_format` | 顯示格式 |
+| `realtime` | `push_mode` | `"interval"`（預設）或 `"realtime"`（實驗性） |
+| `realtime` | `rate_limit_per_minute`、`rate_limit_per_hour`、`rate_limit_per_day` | 速率防護限制 |
 
 單一目標群仍可沿用舊版 `[target]` + `[control]` 設定。
 
@@ -171,6 +174,16 @@ tgwatch once --config config.toml --since 2h --target -1001234567890
 1. 手機安裝 Bark App，點齒輪 → 複製裝置碼。
 2. 在設定中填入 `[notifications]` → `bark_key = "你的Key"`（或在 GUI 中設定）。
 3. 報告、心跳、錯誤會以「Telegram Watch」群組推播到 Bark。
+
+### 即時推送模式 *（實驗性）*
+
+預設情況下，tgwatch 會收集訊息並定期彙整發送（「interval」模式）。**即時模式**會在訊息到達的一剎那將其轉發至控制群組。
+
+1. 在 GUI 中找到 **Realtime Push Mode** 區塊，切換為 **Realtime (Experimental)**。
+2. 確認風險提示對話框（超出速率限制可能導致帳號受限）。
+3. 如有需要可調整速率防護參數 — 預設值已偏保守。
+
+即時模式內建 **7 層速率防護**：滑動視窗限流（20 條/分鐘）、隨機抖動間隔（3 秒 ± 1 秒）、媒體額外延遲（+2 秒）、每小時/每日上限（200/時、1000/天）、FloodWait 指數退避、熔斷器（自動暫停 30 分鐘 + Bark 告警）、啟動冷卻期（5 分鐘 @ 5 條/分鐘）。詳見[設定指南](configuration.zh-Hant.md)。
 
 > ⚠️ 請勿將 `config.toml`、session 檔、`data/`、`reports/` 等敏感資料送進 Git。
 

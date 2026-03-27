@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -82,6 +83,22 @@ class NotificationConfig:
     bark_key: str | None
 
 
+VALID_PUSH_MODES = ("interval", "realtime")
+
+
+@dataclass(frozen=True)
+class RealtimeConfig:
+    push_mode: str
+    report_interval_minutes: int
+    rate_limit_per_minute: int
+    rate_limit_per_hour: int
+    rate_limit_per_day: int
+    min_interval_sec: float
+    media_extra_delay_sec: float
+    warmup_minutes: float
+    warmup_rate: int
+
+
 @dataclass(frozen=True)
 class Config:
     config_version: float
@@ -97,6 +114,7 @@ class Config:
     reporting: ReportingConfig
     display: DisplayConfig
     notifications: NotificationConfig
+    realtime: RealtimeConfig
 
     @property
     def tracked_users_set(self) -> set[int]:
@@ -198,6 +216,7 @@ def load_config(path: Path) -> Config:
     storage_cfg = _parse_storage(data.get("storage") or {}, base_dir)
     display_cfg = _parse_display(data.get("display") or {})
     notifications_cfg = _parse_notifications(data.get("notifications") or {})
+    realtime_cfg = _parse_realtime(data.get("realtime") or {})
 
     target_by_chat: dict[int, TargetGroupConfig] = {}
     target_by_name: dict[str, TargetGroupConfig] = {}
@@ -237,6 +256,7 @@ def load_config(path: Path) -> Config:
         reporting=reporting_cfg,
         display=display_cfg,
         notifications=notifications_cfg,
+        realtime=realtime_cfg,
     )
 
 
@@ -591,6 +611,97 @@ def _parse_notifications(raw: dict[str, Any]) -> NotificationConfig:
     return NotificationConfig(bark_key=bark_key)
 
 
+def _parse_realtime(raw: dict[str, Any]) -> RealtimeConfig:
+    push_mode = str(raw.get("push_mode", "interval")).strip().lower()
+    if push_mode not in VALID_PUSH_MODES:
+        raise ConfigError(
+            f"realtime.push_mode must be one of {VALID_PUSH_MODES!r}, got '{push_mode}'"
+        )
+    if push_mode == "realtime":
+        warnings.warn(
+            "Realtime push mode is EXPERIMENTAL — behavior and config keys may change in future releases.",
+            stacklevel=2,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message="Realtime push mode is EXPERIMENTAL",
+            category=UserWarning,
+        )
+
+    report_interval = _require_int(
+        raw.get("report_interval_minutes", 120),
+        "realtime.report_interval_minutes",
+    )
+    if report_interval <= 0:
+        raise ConfigError("realtime.report_interval_minutes must be > 0")
+
+    rate_per_min = _require_int(
+        raw.get("rate_limit_per_minute", 20),
+        "realtime.rate_limit_per_minute",
+    )
+    if rate_per_min < 1 or rate_per_min > 30:
+        raise ConfigError("realtime.rate_limit_per_minute must be between 1 and 30")
+    if rate_per_min > 25:
+        warnings.warn(
+            "realtime.rate_limit_per_minute > 25 is aggressive and may trigger Telegram flood waits",
+            stacklevel=2,
+        )
+
+    rate_per_hour = _require_int(
+        raw.get("rate_limit_per_hour", 200),
+        "realtime.rate_limit_per_hour",
+    )
+    if rate_per_hour <= 0:
+        raise ConfigError("realtime.rate_limit_per_hour must be > 0")
+
+    rate_per_day = _require_int(
+        raw.get("rate_limit_per_day", 1000),
+        "realtime.rate_limit_per_day",
+    )
+    if rate_per_day <= 0:
+        raise ConfigError("realtime.rate_limit_per_day must be > 0")
+
+    min_interval = _require_float(
+        raw.get("min_interval_sec", 3.0),
+        "realtime.min_interval_sec",
+    )
+    if min_interval <= 0:
+        raise ConfigError("realtime.min_interval_sec must be > 0")
+
+    media_extra = _require_float(
+        raw.get("media_extra_delay_sec", 2.0),
+        "realtime.media_extra_delay_sec",
+    )
+    if media_extra <= 0:
+        raise ConfigError("realtime.media_extra_delay_sec must be > 0")
+
+    warmup_min = _require_float(
+        raw.get("warmup_minutes", 5.0),
+        "realtime.warmup_minutes",
+    )
+    if warmup_min <= 0:
+        raise ConfigError("realtime.warmup_minutes must be > 0")
+
+    warmup_rate = _require_int(
+        raw.get("warmup_rate", 5),
+        "realtime.warmup_rate",
+    )
+    if warmup_rate <= 0:
+        raise ConfigError("realtime.warmup_rate must be > 0")
+
+    return RealtimeConfig(
+        push_mode=push_mode,
+        report_interval_minutes=report_interval,
+        rate_limit_per_minute=rate_per_min,
+        rate_limit_per_hour=rate_per_hour,
+        rate_limit_per_day=rate_per_day,
+        min_interval_sec=min_interval,
+        media_extra_delay_sec=media_extra,
+        warmup_minutes=warmup_min,
+        warmup_rate=warmup_rate,
+    )
+
+
 def _parse_bool(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -608,6 +719,14 @@ def _require_int(value: Any, label: str) -> int:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
         raise ConfigError(f"{label} must be an integer") from exc
+    return parsed
+
+
+def _require_float(value: Any, label: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"{label} must be a number") from exc
     return parsed
 
 

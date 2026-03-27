@@ -4,6 +4,7 @@ import asyncio
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 import logging
+import sqlite3
 from pathlib import Path
 from types import MappingProxyType, SimpleNamespace
 
@@ -15,6 +16,7 @@ from telegram_watch.config import (
     ControlGroupConfig,
     DisplayConfig,
     NotificationConfig,
+    RealtimeConfig,
     ReportingConfig,
     StorageConfig,
     TargetGroupConfig,
@@ -64,6 +66,17 @@ def build_config(tmp_path: Path) -> Config:
         reporting=reporting,
         display=display,
         notifications=notifications,
+        realtime=RealtimeConfig(
+            push_mode="interval",
+            report_interval_minutes=120,
+            rate_limit_per_minute=20,
+            rate_limit_per_hour=200,
+            rate_limit_per_day=1000,
+            min_interval_sec=3.0,
+            media_extra_delay_sec=2.0,
+            warmup_minutes=5.0,
+            warmup_rate=5,
+        ),
     )
 
 
@@ -116,6 +129,17 @@ def build_multi_target_config(tmp_path: Path) -> Config:
         reporting=reporting,
         display=display,
         notifications=notifications,
+        realtime=RealtimeConfig(
+            push_mode="interval",
+            report_interval_minutes=120,
+            rate_limit_per_minute=20,
+            rate_limit_per_hour=200,
+            rate_limit_per_day=1000,
+            min_interval_sec=3.0,
+            media_extra_delay_sec=2.0,
+            warmup_minutes=5.0,
+            warmup_rate=5,
+        ),
     )
 
 
@@ -592,6 +616,17 @@ async def test_reply_media_caption_uses_target_scoped_alias(monkeypatch, tmp_pat
         reporting=reporting,
         display=display,
         notifications=notifications,
+        realtime=RealtimeConfig(
+            push_mode="interval",
+            report_interval_minutes=120,
+            rate_limit_per_minute=20,
+            rate_limit_per_hour=200,
+            rate_limit_per_day=1000,
+            min_interval_sec=3.0,
+            media_extra_delay_sec=2.0,
+            warmup_minutes=5.0,
+            warmup_rate=5,
+        ),
     )
 
     media_file = tmp_path / "reply.jpg"
@@ -1102,3 +1137,82 @@ def _patch_sleep(record: list[float] | None = None):
         yield
     finally:
         runner.asyncio.sleep = original
+
+
+# --- SQLite retry counter reset tests ---
+
+
+@pytest.mark.asyncio
+async def test_sqlite_retry_resets_after_burst_window(tmp_path: Path) -> None:
+    """Sporadic SQLite errors spread far apart should not accumulate to fatal."""
+    import time as _time
+
+    call_count = 0
+
+    class _SqliteFlakyClient(_FakeClient):
+        def __init__(self):
+            super().__init__([])
+
+        async def run_until_disconnected(self):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 6:
+                raise sqlite3.OperationalError("database is locked")
+            # Graceful exit
+            return
+
+    client = _SqliteFlakyClient()
+    config = build_config(tmp_path)
+
+    # Patch time.monotonic so errors 1-3 are in one burst, then a gap, then 4-6.
+    fake_time = [0.0]
+    original_monotonic = _time.monotonic
+
+    def _fake_monotonic():
+        return fake_time[0]
+
+    original_sleep = asyncio.sleep
+
+    async def _fake_sleep(delay, *a, **kw):
+        nonlocal call_count
+        # After 3rd error, simulate a long gap (beyond burst window).
+        if call_count == 3:
+            fake_time[0] += 60.0
+        else:
+            fake_time[0] += delay
+
+    runner.asyncio.sleep = _fake_sleep
+    runner.time.monotonic = _fake_monotonic
+    try:
+        await runner._run_with_reconnect(client, client, config)
+    finally:
+        runner.asyncio.sleep = original_sleep
+        runner.time.monotonic = original_monotonic
+
+    # Should have survived all 6 errors (two bursts of 3) and returned on call 7.
+    assert call_count == 7
+
+
+@pytest.mark.asyncio
+async def test_sqlite_retry_fatal_on_consecutive_burst(tmp_path: Path) -> None:
+    """Consecutive SQLite errors within burst window should still be fatal."""
+    call_count = 0
+
+    class _SqliteBurstClient(_FakeClient):
+        def __init__(self):
+            super().__init__([])
+
+        async def run_until_disconnected(self):
+            nonlocal call_count
+            call_count += 1
+            raise sqlite3.OperationalError("database is locked")
+
+    client = _SqliteBurstClient()
+    config = build_config(tmp_path)
+
+    with _patch_sleep():
+        with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+            await runner._run_with_reconnect(client, client, config)
+
+    # 1 initial + 3 retries = 4 calls, then fatal on the 4th retry
+    assert call_count == 4

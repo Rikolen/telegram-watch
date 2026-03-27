@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](docs/README.zh-Hans.md) | [繁體中文](docs/README.zh-Hant.md) | [日本語](docs/README.ja.md)
 
-**Docs Version:** `v1.0.5` (release `v1.5.0`)
+**Docs Version:** `v1.0.6` (release `v1.6.0`)
 
 [Follow on X](https://x.com/o1xhack) · [Telegram EN channel](https://t.me/lalabeng) · [Telegram 中文频道](https://t.me/o1xinsight)
 
@@ -15,12 +15,13 @@ Turn noisy Telegram groups into a private, structured signal system — **fully 
 - **Multi-Target Monitoring**: Track multiple groups/channels at once, each with its own watchlist, aliases, and report interval.
 - **Control Group Routing**: Route each target to a specific control group to separate workflows cleanly.
 - **Topic Mapping Per Target**: In forum-mode control groups, map `target_chat_id + user_id` to topic IDs so the same user ID can route differently across source groups.
-- **GUI-First Configuration**: Manage credentials, targets, control groups, mappings, and storage from a local web UI.
+- **GUI-First Configuration**: Manage credentials, targets, control groups, mappings, and storage from a local web UI — auto-detects Chinese or English based on your browser language.
 - **One-Click Local Launcher**: Start with Conda-first (`tgwatch`) setup and automatic `venv` fallback.
 - **GUI Runner Controls**: Run once (with optional target and push), start daemon, stop daemon, and inspect live logs in one place.
 - **Safe Run Guardrails**: Session prechecks, retention confirmation for long windows, and explicit in-UI error feedback.
 - **Auto-Reconnect**: Daemon mode survives temporary network outages with exponential backoff and sends a recovery notification once reconnected.
 - **Local Persistence by Default**: Archive messages in SQLite, keep media snapshots, and generate HTML reports for review.
+- **Realtime Push Mode** *(Experimental)*: Forward tracked messages to the control chat the instant they arrive, with a 7-layer rate protection suite to prevent account restrictions.
 - **Privacy by Design**: No cloud dependency, no secret logging, and sensitive runtime files excluded from git.
 
 
@@ -39,7 +40,7 @@ Go to [my.telegram.org](https://my.telegram.org/), sign in with your phone numbe
 Clone a stable release (recommended):
 
 ```bash
-git clone --branch v1.5.0 https://github.com/o1xhack/telegram-watch.git
+git clone --branch v1.6.0 https://github.com/o1xhack/telegram-watch.git
 cd telegram-watch
 ```
 
@@ -111,7 +112,7 @@ pip install -e .
 **Tagged release (stable, version-pinned):**
 
 ```bash
-pip install "git+https://github.com/o1xhack/telegram-watch.git@v1.5.0"
+pip install "git+https://github.com/o1xhack/telegram-watch.git@v1.6.0"
 ```
 
 ### Set up config and run
@@ -147,6 +148,8 @@ If you need to edit `config.toml` manually, see the [configuration guide](docs/c
 | `storage` | `db_path`, `media_dir` | Local storage paths |
 | `notifications` | `bark_key` | Optional Bark push notifications |
 | `display` | `show_ids`, `time_format` | Display formatting |
+| `realtime` | `push_mode` | `"interval"` (default) or `"realtime"` (experimental) |
+| `realtime` | `rate_limit_per_minute`, `rate_limit_per_hour`, `rate_limit_per_day` | Rate protection limits |
 
 Single-group configs using `[target]` + `[control]` are still supported for backwards compatibility.
 
@@ -172,6 +175,16 @@ If you upgrade from an older config (missing `config_version`), tgwatch will sto
 1. Install Bark on your phone, tap gear → copy the device key.
 2. Add to config: `[notifications]` → `bark_key = "your_key_here"` (or set it in the GUI).
 3. Reports, heartbeats, and errors will mirror to Bark under the "Telegram Watch" group.
+
+### Realtime push mode *(Experimental)*
+
+By default, tgwatch collects messages and sends periodic summaries ("interval" mode). **Realtime mode** forwards each message to the control chat the instant it arrives.
+
+1. In the GUI, go to **Realtime Push Mode** and switch to **Realtime (Experimental)**.
+2. Confirm the risk acknowledgment dialog (account restrictions are possible if rate limits are exceeded).
+3. Adjust rate protection settings if needed — the defaults are conservative.
+
+Realtime mode includes a **7-layer rate protection suite**: sliding-window limiter (20/min), jittered delay (3 s ± 1 s), media throttle (+2 s), hourly/daily caps (200/hr, 1000/day), exponential backoff on FloodWait, circuit breaker (auto-pause 30 min + Bark alert), and startup warmup (5 min @ 5/min). See the [configuration guide](docs/configuration.md) for full details.
 
 > ⚠️ Never commit `config.toml`, session files, `data/`, or `reports/`. These contain private information.
 

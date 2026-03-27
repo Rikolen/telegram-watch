@@ -113,11 +113,11 @@ _HTML = """<!doctype html>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>tgwatch GUI</title>
-    <link rel="stylesheet" href="/app.css" />
+    <link rel="stylesheet" href="/app.css?v=2" />
   </head>
   <body>
     <div id="app"></div>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=2"></script>
   </body>
 </html>
 """
@@ -388,6 +388,24 @@ body {
   color: #7f1d1d;
 }
 
+.warning-banner {
+  padding: 18px;
+  border-radius: 16px;
+  border: 2px solid var(--accent-2);
+  background: #fef1e9;
+  color: var(--accent-2);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.warning-banner p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #7a4a1a;
+}
+
 .status {
   font-family: var(--mono);
   font-size: 12px;
@@ -438,6 +456,378 @@ body {
 """
 
 _JS = """
+// --- i18n ---
+const _i18n = {
+  en: {
+    badge: "Local Configurator",
+    title: "tgwatch GUI",
+    subtitle: "Configure multi-group monitoring and control routing without editing files.",
+    saveConfig: "Save Config",
+    reload: "Reload",
+    runner: "Runner",
+    runnerDesc: "Start a one-shot fetch or keep the watcher running in the background. Closing the browser will not stop a running daemon.",
+    onceWindow: "Once Window",
+    onceWindowHelp: "Examples: 10m, 2h, 2026-02-01T10:30Z",
+    onceTarget: "Once Target",
+    allTargets: "All targets",
+    onceTargetHelp: 'Choose a single target, or leave as "All targets".',
+    oncePush: "Once Push",
+    pushToControl: "Push to control chat",
+    oncePushHelp: "Default is off; enable to push the once report.",
+    daemonStatus: "Daemon Status",
+    runOnce: "Run once",
+    runDaemon: "Run daemon",
+    stopDaemon: "Stop daemon",
+    stopGUI: "Stop GUI",
+    guiFootnote: "Stopping the GUI will not stop a running daemon.",
+    runLogs: "Run logs (live)",
+    onceLogs: "Once logs",
+    waitingLogs: "Waiting for logs...",
+    noActiveRun: "No active run.",
+    noRecentOnce: "No recent once run.",
+    checkingStatus: "Checking status...",
+    running: "Running",
+    runningPid: "Running (pid {pid})",
+    notRunning: "Not running",
+    runnerUnavailable: "Runner status unavailable.",
+    sessionNotFound: "Session file not found. Please complete one terminal login first.",
+    confirmRetention: "Please confirm retention_days={days} before starting run daemon.",
+    failStartDaemon: "Failed to start run daemon: {msg}",
+    failStopDaemon: "Failed to stop run daemon: {msg}",
+    invalidSince: "Please enter a valid since window (e.g. 2h).",
+    failStartOnce: "Failed to start once run: {msg}",
+    guiStopped: "GUI stopped.",
+    guiStoppedTitle: "GUI stopped",
+    failStopGui: "Failed to stop GUI: {msg}",
+    migrationFailed: "Migration failed: {msg}",
+    sessionBannerTitle: "Session required before running",
+    sessionBannerDesc: "Run this once in terminal to login:",
+    retentionRequired: "Retention confirmation required:",
+    retentionDesc: "retention_days is set to {days}. Confirm before starting run daemon.",
+    retentionConfirmLabel: "I understand long retention may consume significant disk space.",
+    confirmStart: "Confirm & Start Run",
+    cancel: "Cancel",
+    configLocked: "Configuration locked",
+    configLockedDesc: "This config is outdated or invalid. Rewrite config.toml and reload the GUI.",
+    migrateConfig: "Migrate Config",
+    unableToLoad: "Unable to load GUI",
+    loading: "Loading...",
+    validationIssues: "Validation issues",
+    telegramCreds: "Telegram Credentials",
+    telegramCredsDesc: "Local-only. API hash is masked and kept on disk.",
+    apiId: "API ID",
+    apiHash: "API Hash",
+    sessionFile: "Session File",
+    enableSender: "Enable sender account (optional)",
+    senderSession: "Sender Session File",
+    targets: "Targets",
+    targetsDesc: "Each target represents one monitored group or channel.",
+    group: "Group {n}",
+    addUser: "Add User",
+    removeGroup: "Remove Group",
+    name: "Name",
+    targetChatId: "Target Chat ID",
+    reportInterval: "Report Interval (min)",
+    controlGroup: "Control Group",
+    userId: "User ID",
+    aliasOptional: "Alias (optional)",
+    remove: "Remove",
+    addGroup: "Add Group",
+    controlGroups: "Control Groups",
+    controlGroupsDesc: "Where summaries and commands are delivered.",
+    control: "Control {n}",
+    key: "Key",
+    controlChatId: "Control Chat ID",
+    forumMode: "Forum Mode",
+    topicRouting: "Topic Routing",
+    skipHtmlReport: "Skip HTML Report",
+    mappedTargets: "Mapped targets: ",
+    noneYet: "none yet",
+    topicId: "Topic ID",
+    addTopicMapping: "Add Topic Mapping",
+    addControlGroup: "Add Control Group",
+    storageReporting: "Storage & Reporting",
+    dbPath: "DB Path",
+    mediaDir: "Media Dir",
+    reportsDir: "Reports Dir",
+    defaultSummaryInterval: "Default Summary Interval",
+    timezone: "Timezone",
+    timezoneHelp: "Saved as IANA timezone string (for example Asia/Shanghai).",
+    retentionDays: "Retention Days",
+    displayNotifications: "Display & Notifications",
+    showIds: "Show IDs",
+    barkKey: "Bark Key",
+    optional: "optional",
+    timeFormat: "Time Format",
+    timeFormatCustom: "Time Format (custom)",
+    switchToBuilder: "Switch to builder",
+    editRawStrftime: "Edit as raw strftime string",
+    dontDisplay: "Don\\u0027t display",
+    year: "Year",
+    month: "Month",
+    day: "Day",
+    dateSep: "Date Separator",
+    hour: "Hour",
+    minute: "Minute",
+    second: "Second",
+    unknownUser: "Unknown user ({id})",
+    noAvailableUsers: "No available users",
+    selectUser: "Select user",
+    customTimezone: "Custom (keep existing) - {tz}",
+    limitsText: "Limits: {targets} groups, {users} users per group, {controls} control groups.",
+    select: "Select",
+    realtimeBannerTitle: "Realtime mode (EXPERIMENTAL) is active",
+    realtimeBannerDesc: "Messages are forwarded instantly. Rate limits: {perMin}/min, {perHr}/hr, {perDay}/day. Account restrictions are possible — monitor for FloodWait errors.",
+    cloudSyncBannerTitle: "Your data files are inside a cloud sync directory",
+    cloudSyncBannerDesc: "Cloud sync services can occasionally lock SQLite files, which may cause transient errors. WAL mode is enabled by default since v1.6.0 to mitigate this, but for maximum reliability consider moving data files outside the sync folder.",
+    realtimeSectionTitle: "Realtime Push Mode — EXPERIMENTAL",
+    realtimeSectionDesc: "Forward messages instantly instead of on a scheduled interval. Use with caution.",
+    pushMode: "Push Mode",
+    pushModeInterval: "Interval",
+    pushModeRealtime: "Realtime (Experimental)",
+    intervalModeStatus: "Using scheduled interval mode. Messages are batched into periodic summary reports.",
+    realtimeWarningTitle: "Warning: You are enabling Realtime Push Mode",
+    realtimeWarnExperimental: "This feature is <strong>experimental</strong> and behavior may change in future releases.",
+    realtimeWarnRestrictions: "Sending messages too frequently risks <strong>Telegram account restrictions</strong> (temporary or permanent bans).",
+    realtimeWarnRateProtection: "7-layer rate protection is enabled by default, but aggressive limits can still trigger FloodWait errors.",
+    realtimeWarnDefaults: "Default limits: <strong>20 msgs/min</strong>, <strong>200 msgs/hr</strong>, <strong>1000 msgs/day</strong>.",
+    realtimeWarnCircuitBreaker: "The circuit breaker will automatically pause sending if too many FloodWait errors are received.",
+    realtimeWarnResponsibility: "You are responsible for monitoring logs and adjusting limits as needed.",
+    realtimeRiskConfirm: "I understand the risks and want to enable realtime mode",
+    confirmRealtimeMode: "Confirm Realtime Mode",
+    rateLimitMinute: "Rate Limit / Minute",
+    rateLimitMinuteHelp: "Max messages per minute (1\u201330)",
+    rateLimitHour: "Rate Limit / Hour",
+    rateLimitHourHelp: "Max messages per hour",
+    rateLimitDay: "Rate Limit / Day",
+    rateLimitDayHelp: "Max messages per day",
+    minIntervalSec: "Min Interval (sec)",
+    minIntervalSecHelp: "Minimum seconds between sends",
+    mediaExtraDelay: "Media Extra Delay (sec)",
+    mediaExtraDelayHelp: "Extra delay for media messages",
+    warmupMinutes: "Warmup Minutes",
+    warmupMinutesHelp: "Gradual ramp-up period after start",
+    warmupRate: "Warmup Rate",
+    warmupRateHelp: "Max msgs/min during warmup",
+    rtReportInterval: "Report Interval (min)",
+    rtReportIntervalHelp: "How often to send periodic summary reports",
+  },
+  zh: {
+    badge: "本地配置器",
+    title: "TG 监控面板",
+    subtitle: "配置多群组监控和消息路由，无需手动编辑配置文件。",
+    saveConfig: "保存配置",
+    reload: "重新加载",
+    runner: "运行控制",
+    runnerDesc: "执行单次抓取或在后台持续运行监控。关闭浏览器不会停止正在运行的守护进程。",
+    onceWindow: "时间窗口",
+    onceWindowHelp: "示例：10m、2h、2026-02-01T10:30Z",
+    onceTarget: "目标群组",
+    allTargets: "全部目标",
+    onceTargetHelp: "选择单个目标，或保持「全部目标」。",
+    oncePush: "推送报告",
+    pushToControl: "推送到控制群",
+    oncePushHelp: "默认关闭；启用后将推送单次运行的报告。",
+    daemonStatus: "守护进程状态",
+    runOnce: "单次运行",
+    runDaemon: "启动守护进程",
+    stopDaemon: "停止守护进程",
+    stopGUI: "停止面板",
+    guiFootnote: "停止面板不会停止正在运行的守护进程。",
+    runLogs: "运行日志（实时）",
+    onceLogs: "单次运行日志",
+    waitingLogs: "等待日志...",
+    noActiveRun: "当前没有运行中的任务。",
+    noRecentOnce: "没有最近的单次运行记录。",
+    checkingStatus: "正在检查状态...",
+    running: "运行中",
+    runningPid: "运行中 (pid {pid})",
+    notRunning: "未运行",
+    runnerUnavailable: "无法获取运行状态。",
+    sessionNotFound: "未找到会话文件。请先在终端完成一次登录。",
+    confirmRetention: "请在启动守护进程前确认 retention_days={days}。",
+    failStartDaemon: "启动守护进程失败：{msg}",
+    failStopDaemon: "停止守护进程失败：{msg}",
+    invalidSince: "请输入有效的时间窗口（例如 2h）。",
+    failStartOnce: "启动单次运行失败：{msg}",
+    guiStopped: "面板已停止。",
+    guiStoppedTitle: "面板已停止",
+    failStopGui: "停止面板失败：{msg}",
+    migrationFailed: "迁移失败：{msg}",
+    sessionBannerTitle: "运行前需要先登录会话",
+    sessionBannerDesc: "请在终端运行一次以完成登录：",
+    retentionRequired: "需要确认数据保留设置：",
+    retentionDesc: "retention_days 已设为 {days}，请在启动守护进程前确认。",
+    retentionConfirmLabel: "我了解较长的保留时间可能会占用大量磁盘空间。",
+    confirmStart: "确认并启动",
+    cancel: "取消",
+    configLocked: "配置已锁定",
+    configLockedDesc: "当前配置已过期或无效，请重写 config.toml 并重新加载面板。",
+    migrateConfig: "迁移配置",
+    unableToLoad: "无法加载面板",
+    loading: "加载中...",
+    validationIssues: "验证问题",
+    telegramCreds: "Telegram 凭证",
+    telegramCredsDesc: "仅保存在本地。API Hash 已脱敏并保存在磁盘上。",
+    apiId: "API ID",
+    apiHash: "API Hash",
+    sessionFile: "会话文件",
+    enableSender: "启用发送账号（可选）",
+    senderSession: "发送账号会话文件",
+    targets: "监控目标",
+    targetsDesc: "每个目标代表一个被监控的群组或频道。",
+    group: "群组 {n}",
+    addUser: "添加用户",
+    removeGroup: "移除群组",
+    name: "名称",
+    targetChatId: "目标群组 ID",
+    reportInterval: "汇报间隔（分钟）",
+    controlGroup: "控制群组",
+    userId: "用户 ID",
+    aliasOptional: "别名（可选）",
+    remove: "移除",
+    addGroup: "添加群组",
+    controlGroups: "控制群组",
+    controlGroupsDesc: "汇总和命令发送到此处。",
+    control: "控制 {n}",
+    key: "标识",
+    controlChatId: "控制群组 ID",
+    forumMode: "论坛模式",
+    topicRouting: "话题路由",
+    skipHtmlReport: "跳过 HTML 报告",
+    mappedTargets: "已映射目标：",
+    noneYet: "暂无",
+    topicId: "话题 ID",
+    addTopicMapping: "添加话题映射",
+    addControlGroup: "添加控制群组",
+    storageReporting: "存储与报告",
+    dbPath: "数据库路径",
+    mediaDir: "媒体目录",
+    reportsDir: "报告目录",
+    defaultSummaryInterval: "默认汇总间隔",
+    timezone: "时区",
+    timezoneHelp: "保存为 IANA 时区字符串（例如 Asia/Shanghai）。",
+    retentionDays: "数据保留天数",
+    displayNotifications: "显示与通知",
+    showIds: "显示 ID",
+    barkKey: "Bark Key",
+    optional: "可选",
+    timeFormat: "时间格式",
+    timeFormatCustom: "时间格式（自定义）",
+    switchToBuilder: "切换到构建器",
+    editRawStrftime: "编辑原始 strftime 格式",
+    dontDisplay: "不显示",
+    year: "年",
+    month: "月",
+    day: "日",
+    dateSep: "日期分隔符",
+    hour: "时",
+    minute: "分",
+    second: "秒",
+    unknownUser: "未知用户 ({id})",
+    noAvailableUsers: "没有可用用户",
+    selectUser: "选择用户",
+    customTimezone: "自定义（保持现有）- {tz}",
+    limitsText: "限制：{targets} 个群组，每组 {users} 个用户，{controls} 个控制群组。",
+    select: "选择",
+    realtimeBannerTitle: "实时推送模式（实验性）已启用",
+    realtimeBannerDesc: "消息将即时转发。速率限制：{perMin}/分钟、{perHr}/小时、{perDay}/天。可能触发账号限制——请关注 FloodWait 错误。",
+    cloudSyncBannerTitle: "数据文件位于云同步目录中",
+    cloudSyncBannerDesc: "云同步服务可能会偶尔锁定 SQLite 文件，从而导致临时错误。自 v1.6.0 起默认启用 WAL 模式以缓解此问题，但为获得最佳可靠性，建议将数据文件移出同步文件夹。",
+    realtimeSectionTitle: "实时推送模式 — 实验性",
+    realtimeSectionDesc: "即时转发消息，而非按计划周期汇总。请谨慎使用。",
+    pushMode: "推送模式",
+    pushModeInterval: "定时汇总",
+    pushModeRealtime: "实时推送（实验性）",
+    intervalModeStatus: "当前使用定时汇总模式。消息将按周期批量汇总后推送。",
+    realtimeWarningTitle: "警告：您正在启用实时推送模式",
+    realtimeWarnExperimental: "此功能为<strong>实验性</strong>，后续版本中行为可能发生变化。",
+    realtimeWarnRestrictions: "发送消息过于频繁可能导致 <strong>Telegram 账号被限制</strong>（临时或永久封禁）。",
+    realtimeWarnRateProtection: "默认启用 7 层速率保护，但过于激进的限制仍可能触发 FloodWait 错误。",
+    realtimeWarnDefaults: "默认限制：<strong>20 条/分钟</strong>、<strong>200 条/小时</strong>、<strong>1000 条/天</strong>。",
+    realtimeWarnCircuitBreaker: "熔断器会在收到过多 FloodWait 错误时自动暂停发送。",
+    realtimeWarnResponsibility: "您有责任监控日志并根据需要调整限制。",
+    realtimeRiskConfirm: "我了解相关风险并希望启用实时推送模式",
+    confirmRealtimeMode: "确认启用实时模式",
+    rateLimitMinute: "每分钟速率限制",
+    rateLimitMinuteHelp: "每分钟最大消息数（1–30）",
+    rateLimitHour: "每小时速率限制",
+    rateLimitHourHelp: "每小时最大消息数",
+    rateLimitDay: "每日速率限制",
+    rateLimitDayHelp: "每天最大消息数",
+    minIntervalSec: "最小发送间隔（秒）",
+    minIntervalSecHelp: "两次发送之间的最短间隔",
+    mediaExtraDelay: "媒体额外延迟（秒）",
+    mediaExtraDelayHelp: "媒体消息的额外延迟",
+    warmupMinutes: "预热时长（分钟）",
+    warmupMinutesHelp: "启动后的逐步提速阶段",
+    warmupRate: "预热速率",
+    warmupRateHelp: "预热期间每分钟最大消息数",
+    rtReportInterval: "汇报间隔（分钟）",
+    rtReportIntervalHelp: "定期发送汇总报告的频率",
+  }
+};
+
+// Timezone label translations
+const _tzLabels = {
+  "UTC": "协调世界时 UTC",
+  "China - Shanghai": "中国 - 上海",
+  "China - Hong Kong": "中国 - 香港",
+  "Japan - Tokyo": "日本 - 东京",
+  "Japan - Osaka (alias)": "日本 - 大阪",
+  "Korea - Seoul": "韩国 - 首尔",
+  "US - Eastern (New York)": "美国 - 东部 (纽约)",
+  "US - Central (Chicago)": "美国 - 中部 (芝加哥)",
+  "US - Pacific (Los Angeles)": "美国 - 太平洋 (洛杉矶)",
+  "Europe - UK (London)": "欧洲 - 英国 (伦敦)",
+  "Europe - Central (Paris)": "欧洲 - 巴黎",
+  "Europe - Central (Berlin)": "欧洲 - 柏林",
+  "Europe - Central (Madrid)": "欧洲 - 马德里",
+  "Europe - Central (Rome)": "欧洲 - 罗马",
+};
+
+// Time format unit label translations
+const _tfLabels = {
+  "4-digit (2026)": "四位数 (2026)",
+  "2-digit (26)": "两位数 (26)",
+  "Zero-padded (01)": "补零 (01)",
+  "No padding (1)": "不补零 (1)",
+  "Abbreviated (Jan)": "缩写 (Jan)",
+  "Full name (January)": "全称 (January)",
+  "Zero-padded (05)": "补零 (05)",
+  "Zero-padded (09)": "补零 (09)",
+  "24h zero-padded (14)": "24小时制补零 (14)",
+  "12h zero-padded (02)": "12小时制补零 (02)",
+  "24h no padding (2)": "24小时制不补零 (2)",
+  "Abbreviation (CST)": "缩写 (CST)",
+  "Offset (+0800)": "偏移量 (+0800)",
+  "Dot (.)": "点 (.)",
+  "Dash (-)": "短横线 (-)",
+  "Slash (/)": "斜杠 (/)",
+};
+
+const _lang = (navigator.language || "en").startsWith("zh") ? "zh" : "en";
+const _strings = _i18n[_lang] || _i18n.en;
+
+function t(key) {
+  return _strings[key] || _i18n.en[key] || key;
+}
+
+function tf(key, params) {
+  let s = t(key);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      s = s.split("{" + k + "}").join(String(v));
+    }
+  }
+  return s;
+}
+
+function tLabel(label) {
+  if (_lang !== "zh") return label;
+  return _tzLabels[label] || _tfLabels[label] || label;
+}
+
 const state = {
   data: null,
   errors: [],
@@ -454,7 +844,8 @@ const state = {
   lockMessage: "",
   migrationStatus: "",
   timeFormatParts: null,
-  timeFormatCustom: false
+  timeFormatCustom: false,
+  realtimeConfirmed: false
 };
 const runnerDefaults = {
   running: false,
@@ -469,7 +860,7 @@ const runnerDefaults = {
 const keepSecret = "********";
 const LOG_MAX_LINES = 200;
 
-const limitText = (limits) => `Limits: ${limits.maxTargets} groups, ${limits.maxUsersPerTarget} users per group, ${limits.maxControlGroups} control groups.`;
+const limitText = (limits) => tf("limitsText", {targets: limits.maxTargets, users: limits.maxUsersPerTarget, controls: limits.maxControlGroups});
 
 const blankTarget = () => ({
   name: "",
@@ -553,12 +944,12 @@ const buildUserOptions = (targetUsers, selectedUsers, currentValue) => {
     options.push(`<option value="${value}">${label}</option>`);
   });
   if (currentValue && !targetUsers.some((user) => user.key === currentValue)) {
-    options.unshift(`<option value="${currentValue}">Unknown user (${currentValue})</option>`);
+    options.unshift(`<option value="${currentValue}">${tf("unknownUser", {id: currentValue})}</option>`);
   }
   if (!options.length) {
-    options.push(`<option value="">No available users</option>`);
+    options.push(`<option value="">${t("noAvailableUsers")}</option>`);
   } else {
-    options.unshift(`<option value="">Select user</option>`);
+    options.unshift(`<option value="">${t("selectUser")}</option>`);
   }
   return options.join("");
 };
@@ -574,12 +965,12 @@ const buildTimezoneOptions = (presets, currentValue) => {
     if (seen.has(value)) return;
     seen.add(value);
     options.push(
-      `<option value="${value}" ${value === selected ? "selected" : ""}>${label} (${value})</option>`
+      `<option value="${value}" ${value === selected ? "selected" : ""}>${tLabel(label)} (${value})</option>`
     );
   });
   if (!seen.has(selected)) {
     options.unshift(
-      `<option value="${selected}" selected>Custom (keep existing) - ${selected}</option>`
+      `<option value="${selected}" selected>${tf("customTimezone", {tz: selected})}</option>`
     );
   }
   if (!options.length) {
@@ -706,10 +1097,10 @@ function composeTimeFormat(parts) {
 }
 
 function buildTimeFormatDropdown(unitName, presets, currentValue, fieldId) {
-  const options = ['<option value="">Don\\u0027t display</option>'];
+  const options = ['<option value="">' + t("dontDisplay") + '</option>'];
   (presets || []).forEach((entry) => {
     const sel = entry.value === currentValue ? "selected" : "";
-    options.push('<option value="' + entry.value + '" ' + sel + '>' + entry.label + "</option>");
+    options.push('<option value="' + entry.value + '" ' + sel + '>' + tLabel(entry.label) + "</option>");
   });
   return '<select id="' + fieldId + '" data-tf-unit="' + unitName + '">' + options.join("") + "</select>";
 }
@@ -734,11 +1125,11 @@ function timeFormatPreview(parts) {
 }
 
 const runnerStatusText = (runner) => {
-  if (!runner) return "Checking status...";
+  if (!runner) return t("checkingStatus");
   if (runner.running) {
-    return runner.pid ? `Running (pid ${runner.pid})` : "Running";
+    return runner.pid ? tf("runningPid", {pid: runner.pid}) : t("running");
   }
-  return "Not running";
+  return t("notRunning");
 };
 
 const runnerMessageText = () => {
@@ -767,10 +1158,10 @@ function updateRunnerUI() {
       runLogEl.textContent = runLogText;
       runLogEl.classList.remove("empty");
     } else if (runner.running) {
-      runLogEl.textContent = "Waiting for logs...";
+      runLogEl.textContent = t("waitingLogs");
       runLogEl.classList.add("empty");
     } else {
-      runLogEl.textContent = "No active run.";
+      runLogEl.textContent = t("noActiveRun");
       runLogEl.classList.add("empty");
     }
   }
@@ -782,7 +1173,7 @@ function updateRunnerUI() {
       onceLogEl.textContent = onceLogText;
       onceLogEl.classList.remove("empty");
     } else {
-      onceLogEl.textContent = "No recent once run.";
+      onceLogEl.textContent = t("noRecentOnce");
       onceLogEl.classList.add("empty");
     }
   }
@@ -851,7 +1242,7 @@ async function loadRunnerStatus() {
     }
     updateRunnerUI();
   } catch (err) {
-    state.runnerMessage = "Runner status unavailable.";
+    state.runnerMessage = t("runnerUnavailable");
     updateRunnerUI();
   } finally {
     state.runnerLoading = false;
@@ -861,7 +1252,7 @@ async function loadRunnerStatus() {
 async function startRun() {
   const runner = state.runner || runnerDefaults;
   if (!runner.session_ready) {
-    state.runnerMessage = "Session file not found. Please complete one terminal login first.";
+    state.runnerMessage = t("sessionNotFound");
     updateRunnerUI();
     return;
   }
@@ -875,7 +1266,7 @@ async function startRun() {
       return;
     }
     if (!state.runnerRetentionConfirmed) {
-      state.runnerMessage = `Please confirm retention_days=${runner.retention_days} before starting run daemon.`;
+      state.runnerMessage = tf("confirmRetention", {days: runner.retention_days});
       updateRunnerUI();
       return;
     }
@@ -907,7 +1298,7 @@ async function startRunConfirmed() {
     updateRunnerUI();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.runnerMessage = `Failed to start run daemon: ${message}`;
+    state.runnerMessage = tf("failStartDaemon", {msg: message});
     updateRunnerUI();
   }
 }
@@ -923,7 +1314,7 @@ async function stopRun() {
     updateRunnerUI();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.runnerMessage = `Failed to stop run daemon: ${message}`;
+    state.runnerMessage = tf("failStopDaemon", {msg: message});
     updateRunnerUI();
   }
 }
@@ -936,7 +1327,7 @@ async function startOnce() {
   const target = targetInput ? targetInput.value.trim() : state.runnerTarget;
   const push = pushInput ? pushInput.checked : state.runnerPush;
   if (!since) {
-    state.runnerMessage = "Please enter a valid since window (e.g. 2h).";
+    state.runnerMessage = t("invalidSince");
     updateRunnerUI();
     return;
   }
@@ -954,7 +1345,7 @@ async function startOnce() {
     updateRunnerUI();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.runnerMessage = `Failed to start once run: ${message}`;
+    state.runnerMessage = tf("failStartOnce", {msg: message});
     updateRunnerUI();
   }
 }
@@ -969,11 +1360,11 @@ async function stopGui() {
     const res = await fetch("/api/gui/stop", { method: "POST" });
     const payload = await res.json();
     const app = document.getElementById("app");
-    const message = payload && payload.status ? payload.status : "GUI stopped.";
-    app.innerHTML = `<div class="section"><h2>GUI stopped</h2><p>${message}</p></div>`;
+    const message = payload && payload.status ? payload.status : t("guiStopped");
+    app.innerHTML = `<div class="section"><h2>${t("guiStoppedTitle")}</h2><p>${message}</p></div>`;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.status = `Failed to stop GUI: ${message}`;
+    state.status = tf("failStopGui", {msg: message});
     render();
   }
 }
@@ -987,7 +1378,7 @@ async function migrateConfig() {
     render();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    state.migrationStatus = `Migration failed: ${message}`;
+    state.migrationStatus = tf("migrationFailed", {msg: message});
     render();
   }
 }
@@ -1006,11 +1397,11 @@ function render() {
   const app = document.getElementById("app");
   if (!state.data) {
     const errorBlock = state.errors.length
-      ? `<div class="error"><strong>Unable to load GUI</strong><ul>${state.errors
+      ? `<div class="error"><strong>${t("unableToLoad")}</strong><ul>${state.errors
           .map((e) => `<li>${e}</li>`)
           .join("")}</ul></div>`
       : "";
-    app.innerHTML = `<div class="section"><h2>Loading...</h2>${errorBlock}</div>`;
+    app.innerHTML = `<div class="section"><h2>${t("loading")}</h2>${errorBlock}</div>`;
     return;
   }
   const data = state.data;
@@ -1024,7 +1415,7 @@ function render() {
   const oncePushChecked = state.runnerPush;
 
   const errorBlock = state.errors.length
-    ? `<div class="error"><strong>Validation issues</strong><ul>${state.errors.map(e => `<li>${e}</li>`).join("")}</ul></div>`
+    ? `<div class="error"><strong>${t("validationIssues")}</strong><ul>${state.errors.map(e => `<li>${e}</li>`).join("")}</ul></div>`
     : "";
 
   const noticeParts = [];
@@ -1033,10 +1424,10 @@ function render() {
   const statusBlock = noticeParts.length ? `<div class="notice">${noticeParts.join("<br />")}</div>` : "";
   const lockBanner = state.locked
     ? `<div class="lock-banner" id="lock-banner">
-        Configuration locked
-        <p>${state.lockMessage || "This config is outdated or invalid. Rewrite config.toml and reload the GUI."}</p>
+        ${t("configLocked")}
+        <p>${state.lockMessage || t("configLockedDesc")}</p>
         <div style="margin-top:12px;">
-          <button class="button danger" data-action="migrate-config" data-allow-locked="true">Migrate Config</button>
+          <button class="button danger" data-action="migrate-config" data-allow-locked="true">${t("migrateConfig")}</button>
         </div>
       </div>`
     : "";
@@ -1046,7 +1437,7 @@ function render() {
     .join("");
   const defaultControlLabel = controlGroups.length === 1
     ? `default (${controlGroups[0].key || "control-1"})`
-    : "Select";
+    : t("select");
 
   const runner = state.runner || runnerDefaults;
   const runnerMessage = runnerMessageText();
@@ -1054,60 +1445,74 @@ function render() {
   const onceLog = runner.once_log || "";
   const sessionBanner = !runner.session_ready
     ? `<div class="lock-banner" style="margin-bottom:16px;">
-        Session required before running
-        <p>Run this once in terminal to login: <code>python -m tgwatch run --config config.toml</code></p>
+        ${t("sessionBannerTitle")}
+        <p>${t("sessionBannerDesc")} <code>python -m tgwatch run --config config.toml</code></p>
       </div>`
     : "";
   const retentionNotice = runner.requires_retention_confirm && state.runnerRetentionPrompt
     ? `<div class="notice">
-        <strong>Retention confirmation required:</strong>
-        retention_days is set to ${runner.retention_days}. Confirm before starting run daemon.
+        <strong>${t("retentionRequired")}</strong>
+        ${tf("retentionDesc", {days: runner.retention_days})}
         <label class="checkbox">
           <input type="checkbox" id="run-retention-confirm" ${state.runnerRetentionConfirmed ? "checked" : ""} />
-          I understand long retention may consume significant disk space.
+          ${t("retentionConfirmLabel")}
         </label>
         <div class="actions" style="margin-top:10px;">
-          <button class="button secondary" data-action="run-daemon-confirm" ${state.runnerRetentionConfirmed ? "" : "disabled"}>Confirm & Start Run</button>
-          <button class="button secondary" data-action="run-daemon-cancel">Cancel</button>
+          <button class="button secondary" data-action="run-daemon-confirm" ${state.runnerRetentionConfirmed ? "" : "disabled"}>${t("confirmStart")}</button>
+          <button class="button secondary" data-action="run-daemon-cancel">${t("cancel")}</button>
         </div>
+      </div>`
+    : "";
+  const realtimeBanner = data.realtime && data.realtime.push_mode === "realtime" && state.realtimeConfirmed
+    ? `<div class="warning-banner">
+        \\u26A0\\uFE0F ${t("realtimeBannerTitle")}
+        <p>${tf("realtimeBannerDesc", {perMin: data.realtime.rate_limit_per_minute, perHr: data.realtime.rate_limit_per_hour, perDay: data.realtime.rate_limit_per_day})}</p>
+      </div>`
+    : "";
+  const cloudSyncBanner = data.cloud_sync_warning
+    ? `<div class="warning-banner">
+        \\u26A0\\uFE0F ${t("cloudSyncBannerTitle")} (${data.cloud_sync_warning})
+        <p>${t("cloudSyncBannerDesc")}</p>
       </div>`
     : "";
 
   app.innerHTML = `
     <div class="header">
       <div class="hero">
-        <span class="badge">Local Configurator</span>
-        <h1>tgwatch GUI</h1>
-        <p>Configure multi-group monitoring and control routing without editing files.</p>
+        <span class="badge">${t("badge")}</span>
+        <h1>${t("title")}</h1>
+        <p>${t("subtitle")}</p>
         <div class="status">${limitText(limits)}</div>
       </div>
       <div class="actions">
-        <button class="button" data-action="save">Save Config</button>
-        <button class="button secondary" data-action="reload" data-allow-locked="true">Reload</button>
+        <button class="button" data-action="save">${t("saveConfig")}</button>
+        <button class="button secondary" data-action="reload" data-allow-locked="true">${t("reload")}</button>
       </div>
     </div>
+    ${cloudSyncBanner}
     ${statusBlock}
     ${errorBlock}
     ${lockBanner}
 
     <section class="section" id="runner-section">
-      <h2>Runner</h2>
-      <p>Start a one-shot fetch or keep the watcher running in the background. Closing the browser will not stop a running daemon.</p>
+      <h2>${t("runner")}</h2>
+      <p>${t("runnerDesc")}</p>
       ${sessionBanner}
       ${retentionNotice}
+      ${realtimeBanner}
       <div class="runner-grid">
         <div class="field">
-          <label>Once Window</label>
+          <label>${t("onceWindow")}</label>
           <input id="once-since" value="${state.runnerSince}" placeholder="2h" />
-          <small>Examples: 10m, 2h, 2026-02-01T10:30Z</small>
+          <small>${t("onceWindowHelp")}</small>
         </div>
         <div class="field">
-          <label>Once Target</label>
+          <label>${t("onceTarget")}</label>
           <select id="once-target">
             ${(() => {
               const options = [];
               options.push(
-                `<option value="" ${selectedOnceTarget === "" ? "selected" : ""}>All targets</option>`
+                `<option value="" ${selectedOnceTarget === "" ? "selected" : ""}>${t("allTargets")}</option>`
               );
               targets.forEach((target, idx) => {
                 const label = target.name || `group-${idx + 1}`;
@@ -1125,98 +1530,98 @@ function render() {
               return options.join("");
             })()}
           </select>
-          <small>Choose a single target, or leave as “All targets”.</small>
+          <small>${t("onceTargetHelp")}</small>
         </div>
         <div class="field">
-          <label>Once Push</label>
+          <label>${t("oncePush")}</label>
           <label class="checkbox">
             <input type="checkbox" id="once-push" ${oncePushChecked ? "checked" : ""} />
-            Push to control chat
+            ${t("pushToControl")}
           </label>
-          <small>Default is off; enable to push the once report.</small>
+          <small>${t("oncePushHelp")}</small>
         </div>
         <div class="field">
-          <label>Daemon Status</label>
+          <label>${t("daemonStatus")}</label>
           <div class="status" id="runner-status">${runnerStatusText(runner)}</div>
         </div>
       </div>
       <div class="actions" style="margin-top:16px;">
-        <button class="button" data-action="run-once">Run once</button>
-        <button class="button secondary" data-action="run-daemon">Run daemon</button>
-        <button class="button secondary" data-action="run-daemon-stop" disabled>Stop daemon</button>
-        <button class="button danger" data-action="stop-gui" data-allow-locked="true">Stop GUI</button>
+        <button class="button" data-action="run-once">${t("runOnce")}</button>
+        <button class="button secondary" data-action="run-daemon">${t("runDaemon")}</button>
+        <button class="button secondary" data-action="run-daemon-stop" disabled>${t("stopDaemon")}</button>
+        <button class="button danger" data-action="stop-gui" data-allow-locked="true">${t("stopGUI")}</button>
       </div>
-      <div class="runner-footnote">Stopping the GUI will not stop a running daemon.</div>
+      <div class="runner-footnote">${t("guiFootnote")}</div>
       <div class="notice" id="runner-message" style="${runnerMessage ? "" : "display:none;"}">${runnerMessage}</div>
       <div class="grid" style="margin-top:16px;">
         <div>
-          <div class="status">Run logs (live)</div>
-          <pre class="log-box ${runner.running && runLog ? "" : "empty"}" id="run-log">${runner.running ? (runLog || "Waiting for logs...") : "No active run."}</pre>
+          <div class="status">${t("runLogs")}</div>
+          <pre class="log-box ${runner.running && runLog ? "" : "empty"}" id="run-log">${runner.running ? (runLog || t("waitingLogs")) : t("noActiveRun")}</pre>
         </div>
         <div>
-          <div class="status">Once logs</div>
-          <pre class="log-box ${onceLog ? "" : "empty"}" id="once-log">${onceLog || "No recent once run."}</pre>
+          <div class="status">${t("onceLogs")}</div>
+          <pre class="log-box ${onceLog ? "" : "empty"}" id="once-log">${onceLog || t("noRecentOnce")}</pre>
         </div>
       </div>
     </section>
 
     <section class="section">
-      <h2>Telegram Credentials</h2>
-      <p>Local-only. API hash is masked and kept on disk.</p>
+      <h2>${t("telegramCreds")}</h2>
+      <p>${t("telegramCredsDesc")}</p>
       <div class="grid">
         <div class="field">
-          <label>API ID</label>
+          <label>${t("apiId")}</label>
           <input data-field="telegram.api_id" value="${data.telegram.api_id}" placeholder="123456" />
         </div>
         <div class="field">
-          <label>API Hash</label>
+          <label>${t("apiHash")}</label>
           <input type="password" data-field="telegram.api_hash" value="${data.telegram.api_hash}" placeholder="${keepSecret}" />
         </div>
         <div class="field">
-          <label>Session File</label>
+          <label>${t("sessionFile")}</label>
           <input data-field="telegram.session_file" value="${data.telegram.session_file}" placeholder="data/tgwatch.session" />
         </div>
       </div>
       <div class="field" style="margin-top:16px;">
-        <label><input type="checkbox" data-field="sender.enabled" ${data.sender.enabled ? "checked" : ""}/> Enable sender account (optional)</label>
+        <label><input type="checkbox" data-field="sender.enabled" ${data.sender.enabled ? "checked" : ""}/> ${t("enableSender")}</label>
       </div>
       ${data.sender.enabled ? `
       <div class="grid" style="margin-top:12px;">
         <div class="field">
-          <label>Sender Session File</label>
+          <label>${t("senderSession")}</label>
           <input data-field="sender.session_file" value="${data.sender.session_file}" placeholder="data/tgwatch_sender.session" />
         </div>
       </div>` : ""}
     </section>
 
     <section class="section">
-      <h2>Targets</h2>
-      <p>Each target represents one monitored group or channel.</p>
+      <h2>${t("targets")}</h2>
+      <p>${t("targetsDesc")}</p>
       <div class="card-list">
         ${targets.map((target, idx) => `
         <div class="card">
           <header>
-            <h3>Group ${idx + 1}</h3>
+            <h3>${tf("group", {n: idx + 1})}</h3>
             <div class="inline-actions">
-              <button class="button secondary" data-action="add-user" data-target-index="${idx}" ${target.tracked_users.length >= limits.maxUsersPerTarget ? "disabled" : ""}>Add User</button>
-              <button class="button danger" data-action="remove-target" data-target-index="${idx}">Remove Group</button>
+              <button class="button secondary" data-action="add-user" data-target-index="${idx}" ${target.tracked_users.length >= limits.maxUsersPerTarget ? "disabled" : ""}>${t("addUser")}</button>
+              <button class="button danger" data-action="remove-target" data-target-index="${idx}">${t("removeGroup")}</button>
             </div>
           </header>
           <div class="grid">
             <div class="field">
-              <label>Name</label>
+              <label>${t("name")}</label>
               <input data-field="targets.${idx}.name" value="${target.name}" placeholder="group-${idx + 1}" />
             </div>
             <div class="field">
-              <label>Target Chat ID</label>
+              <label>${t("targetChatId")}</label>
               <input data-field="targets.${idx}.target_chat_id" value="${target.target_chat_id}" placeholder="-100..." />
             </div>
             <div class="field">
-              <label>Report Interval (min)</label>
-              <input data-field="targets.${idx}.summary_interval_minutes" value="${target.summary_interval_minutes}" placeholder="optional" />
+              <label>${t("reportInterval")}</label>
+              <input data-field="targets.${idx}.summary_interval_minutes" value="${target.summary_interval_minutes}" placeholder="${t("optional")}" />
             </div>
             <div class="field">
-              <label>Control Group</label>
+              <label>${t("controlGroup")}</label>
               <select data-field="targets.${idx}.control_group">
                 <option value="">${defaultControlLabel}</option>
                 ${controlOptions}
@@ -1226,55 +1631,55 @@ function render() {
           <div class="list" style="margin-top:16px;">
             ${target.tracked_users.map((user, uidx) => `
             <div class="list-row">
-              <input data-field="targets.${idx}.tracked_users.${uidx}.id" value="${user.id}" placeholder="User ID" />
-              <input data-field="targets.${idx}.tracked_users.${uidx}.alias" value="${user.alias}" placeholder="Alias (optional)" />
-              <button class="button secondary" data-action="remove-user" data-target-index="${idx}" data-user-index="${uidx}">Remove</button>
+              <input data-field="targets.${idx}.tracked_users.${uidx}.id" value="${user.id}" placeholder="${t("userId")}" />
+              <input data-field="targets.${idx}.tracked_users.${uidx}.alias" value="${user.alias}" placeholder="${t("aliasOptional")}" />
+              <button class="button secondary" data-action="remove-user" data-target-index="${idx}" data-user-index="${uidx}">${t("remove")}</button>
             </div>`).join("")}
           </div>
         </div>`).join("")}
       </div>
       <div style="margin-top:16px;">
-        <button class="button secondary" data-action="add-target" ${targets.length >= limits.maxTargets ? "disabled" : ""}>Add Group</button>
+        <button class="button secondary" data-action="add-target" ${targets.length >= limits.maxTargets ? "disabled" : ""}>${t("addGroup")}</button>
       </div>
     </section>
 
     <section class="section">
-      <h2>Control Groups</h2>
-      <p>Where summaries and commands are delivered.</p>
+      <h2>${t("controlGroups")}</h2>
+      <p>${t("controlGroupsDesc")}</p>
       <div class="card-list">
         ${controlGroups.map((group, idx) => `
         <div class="card">
           <header>
-            <h3>Control ${idx + 1}</h3>
+            <h3>${tf("control", {n: idx + 1})}</h3>
             <div class="inline-actions">
-              <button class="button danger" data-action="remove-control" data-control-index="${idx}">Remove</button>
+              <button class="button danger" data-action="remove-control" data-control-index="${idx}">${t("remove")}</button>
             </div>
           </header>
           <div class="grid">
             <div class="field">
-              <label>Key</label>
+              <label>${t("key")}</label>
               <input data-field="control_groups.${idx}.key" value="${group.key}" placeholder="main" />
             </div>
             <div class="field">
-              <label>Control Chat ID</label>
+              <label>${t("controlChatId")}</label>
               <input data-field="control_groups.${idx}.control_chat_id" value="${group.control_chat_id}" placeholder="-100..." />
             </div>
             <div class="field">
-              <label>Forum Mode</label>
+              <label>${t("forumMode")}</label>
               <select data-field="control_groups.${idx}.is_forum">
                 <option value="false" ${group.is_forum ? "" : "selected"}>false</option>
                 <option value="true" ${group.is_forum ? "selected" : ""}>true</option>
               </select>
             </div>
             <div class="field">
-              <label>Topic Routing</label>
+              <label>${t("topicRouting")}</label>
               <select data-field="control_groups.${idx}.topic_routing_enabled">
                 <option value="false" ${group.topic_routing_enabled ? "" : "selected"}>false</option>
                 <option value="true" ${group.topic_routing_enabled ? "selected" : ""}>true</option>
               </select>
             </div>
             <div class="field">
-              <label>Skip HTML Report</label>
+              <label>${t("skipHtmlReport")}</label>
               <select data-field="control_groups.${idx}.skip_html_report">
                 <option value="false" ${group.skip_html_report ? "" : "selected"}>false</option>
                 <option value="true" ${group.skip_html_report ? "selected" : ""}>true</option>
@@ -1282,9 +1687,9 @@ function render() {
             </div>
           </div>
           <div class="status" style="margin-top:12px;">
-            Mapped targets: ${(() => {
+            ${t("mappedTargets")}${(() => {
               const mapped = mapTargetsToControl(targets, controlGroups, group.key);
-              return mapped.length ? mapped.join(", ") : "none yet";
+              return mapped.length ? mapped.join(", ") : t("noneYet");
             })()}
           </div>
           ${group.topic_routing_enabled ? `
@@ -1294,89 +1699,155 @@ function render() {
               <select data-field="control_groups.${idx}.topic_target_map.${eidx}.user_key">
                 ${buildUserOptions(targetUsers, selectedUsers, entryKey(entry))}
               </select>
-              <input data-field="control_groups.${idx}.topic_target_map.${eidx}.topic_id" value="${entry.topic_id}" placeholder="Topic ID" />
-              <button class="button secondary" data-action="remove-topic" data-control-index="${idx}" data-topic-index="${eidx}">Remove</button>
+              <input data-field="control_groups.${idx}.topic_target_map.${eidx}.topic_id" value="${entry.topic_id}" placeholder="${t("topicId")}" />
+              <button class="button secondary" data-action="remove-topic" data-control-index="${idx}" data-topic-index="${eidx}">${t("remove")}</button>
             </div>`).join("")}
           </div>
           <div style="margin-top:12px;">
-            <button class="button secondary" data-action="add-topic" data-control-index="${idx}">Add Topic Mapping</button>
+            <button class="button secondary" data-action="add-topic" data-control-index="${idx}">${t("addTopicMapping")}</button>
           </div>` : ""}
         </div>`).join("")}
       </div>
       <div style="margin-top:16px;">
-        <button class="button secondary" data-action="add-control" ${controlGroups.length >= limits.maxControlGroups ? "disabled" : ""}>Add Control Group</button>
+        <button class="button secondary" data-action="add-control" ${controlGroups.length >= limits.maxControlGroups ? "disabled" : ""}>${t("addControlGroup")}</button>
       </div>
     </section>
 
     <section class="section">
-      <h2>Storage & Reporting</h2>
+      <h2>${t("storageReporting")}</h2>
       <div class="grid">
         <div class="field">
-          <label>DB Path</label>
+          <label>${t("dbPath")}</label>
           <input data-field="storage.db_path" value="${data.storage.db_path}" />
         </div>
         <div class="field">
-          <label>Media Dir</label>
+          <label>${t("mediaDir")}</label>
           <input data-field="storage.media_dir" value="${data.storage.media_dir}" />
         </div>
         <div class="field">
-          <label>Reports Dir</label>
+          <label>${t("reportsDir")}</label>
           <input data-field="reporting.reports_dir" value="${data.reporting.reports_dir}" />
         </div>
         <div class="field">
-          <label>Default Summary Interval</label>
+          <label>${t("defaultSummaryInterval")}</label>
           <input data-field="reporting.summary_interval_minutes" value="${data.reporting.summary_interval_minutes}" />
         </div>
         <div class="field">
-          <label>Timezone</label>
+          <label>${t("timezone")}</label>
           <select data-field="reporting.timezone">
             ${buildTimezoneOptions(timezonePresets, data.reporting.timezone)}
           </select>
-          <small>Saved as IANA timezone string (for example Asia/Shanghai).</small>
+          <small>${t("timezoneHelp")}</small>
         </div>
         <div class="field">
-          <label>Retention Days</label>
+          <label>${t("retentionDays")}</label>
           <input data-field="reporting.retention_days" value="${data.reporting.retention_days}" />
         </div>
       </div>
     </section>
 
     <section class="section">
-      <h2>Display & Notifications</h2>
+      <h2>${t("displayNotifications")}</h2>
       <div class="grid">
         <div class="field">
-          <label>Show IDs</label>
+          <label>${t("showIds")}</label>
           <select data-field="display.show_ids">
             <option value="true" ${data.display.show_ids ? "selected" : ""}>true</option>
             <option value="false" ${data.display.show_ids ? "" : "selected"}>false</option>
           </select>
         </div>
         <div class="field">
-          <label>Bark Key</label>
-          <input data-field="notifications.bark_key" value="${data.notifications.bark_key}" placeholder="optional" />
+          <label>${t("barkKey")}</label>
+          <input data-field="notifications.bark_key" value="${data.notifications.bark_key}" placeholder="${t("optional")}" />
         </div>
       </div>
       ${(() => {
         const tfUnits = data.display_time_format_units || {};
         if (state.timeFormatCustom || !state.timeFormatParts) {
-          return '<div style="margin-top:16px;"><div class="field"><label>Time Format (custom)</label><input data-field="display.time_format" value="' + (data.display.time_format || "") + '" /><small><a href="#" data-action="tf-switch-builder">Switch to builder</a></small></div></div>';
+          return '<div style="margin-top:16px;"><div class="field"><label>' + t("timeFormatCustom") + '</label><input data-field="display.time_format" value="' + (data.display.time_format || "") + '" /><small><a href="#" data-action="tf-switch-builder">' + t("switchToBuilder") + '</a></small></div></div>';
         }
         const p = state.timeFormatParts;
         const hasMultiDate = [p.year, p.month, p.day].filter(Boolean).length > 1;
-        return '<div style="margin-top:16px;"><label style="font-weight:600;margin-bottom:8px;display:block;">Time Format</label>'
+        return '<div style="margin-top:16px;"><label style="font-weight:600;margin-bottom:8px;display:block;">' + t("timeFormat") + '</label>'
           + '<div class="grid">'
-          + '<div class="field"><label>Year</label>' + buildTimeFormatDropdown("year", tfUnits.year, p.year, "tf-year") + '</div>'
-          + '<div class="field"><label>Month</label>' + buildTimeFormatDropdown("month", tfUnits.month, p.month, "tf-month") + '</div>'
-          + '<div class="field"><label>Day</label>' + buildTimeFormatDropdown("day", tfUnits.day, p.day, "tf-day") + '</div>'
-          + (hasMultiDate ? '<div class="field"><label>Date Separator</label>' + buildTimeFormatDropdown("dateSep", tfUnits.date_separator, p.dateSep, "tf-datesep") + '</div>' : '')
-          + '<div class="field"><label>Hour</label>' + buildTimeFormatDropdown("hour", tfUnits.hour, p.hour, "tf-hour") + '</div>'
-          + '<div class="field"><label>Minute</label>' + buildTimeFormatDropdown("minute", tfUnits.minute, p.minute, "tf-minute") + '</div>'
-          + '<div class="field"><label>Second</label>' + buildTimeFormatDropdown("second", tfUnits.second, p.second, "tf-second") + '</div>'
-          + '<div class="field"><label>Timezone</label>' + buildTimeFormatDropdown("timezone", tfUnits.timezone, p.timezone, "tf-timezone") + '</div>'
+          + '<div class="field"><label>' + t("year") + '</label>' + buildTimeFormatDropdown("year", tfUnits.year, p.year, "tf-year") + '</div>'
+          + '<div class="field"><label>' + t("month") + '</label>' + buildTimeFormatDropdown("month", tfUnits.month, p.month, "tf-month") + '</div>'
+          + '<div class="field"><label>' + t("day") + '</label>' + buildTimeFormatDropdown("day", tfUnits.day, p.day, "tf-day") + '</div>'
+          + (hasMultiDate ? '<div class="field"><label>' + t("dateSep") + '</label>' + buildTimeFormatDropdown("dateSep", tfUnits.date_separator, p.dateSep, "tf-datesep") + '</div>' : '')
+          + '<div class="field"><label>' + t("hour") + '</label>' + buildTimeFormatDropdown("hour", tfUnits.hour, p.hour, "tf-hour") + '</div>'
+          + '<div class="field"><label>' + t("minute") + '</label>' + buildTimeFormatDropdown("minute", tfUnits.minute, p.minute, "tf-minute") + '</div>'
+          + '<div class="field"><label>' + t("second") + '</label>' + buildTimeFormatDropdown("second", tfUnits.second, p.second, "tf-second") + '</div>'
+          + '<div class="field"><label>' + t("timezone") + '</label>' + buildTimeFormatDropdown("timezone", tfUnits.timezone, p.timezone, "tf-timezone") + '</div>'
           + '</div>'
           + '<div style="margin-top:12px;"><small>Preview: <strong style="font-family:var(--mono);color:var(--accent);">' + timeFormatPreview(p) + '</strong></small>'
           + '&nbsp;&nbsp;<small>Format: <code style="font-size:12px;color:var(--muted);">' + composeTimeFormat(p) + '</code></small></div>'
-          + '<small><a href="#" data-action="tf-switch-custom">Edit as raw strftime string</a></small>'
+          + '<small><a href="#" data-action="tf-switch-custom">' + t("editRawStrftime") + '</a></small>'
+          + '</div>';
+      })()}
+    </section>
+
+    <section class="section">
+      <h2>${t("realtimeSectionTitle")}</h2>
+      <p>${t("realtimeSectionDesc")}</p>
+      <div class="grid">
+        <div class="field">
+          <label>${t("pushMode")}</label>
+          <select id="realtime-push-mode" data-field="realtime.push_mode">
+            <option value="interval" ${data.realtime.push_mode !== "realtime" ? "selected" : ""}>${t("pushModeInterval")}</option>
+            <option value="realtime" ${data.realtime.push_mode === "realtime" ? "selected" : ""}>${t("pushModeRealtime")}</option>
+          </select>
+        </div>
+      </div>
+      ${(() => {
+        if (data.realtime.push_mode !== "realtime" && !state.realtimeConfirmed) {
+          return '<div class="status" style="margin-top:12px;">' + t("intervalModeStatus") + '</div>';
+        }
+        if (data.realtime.push_mode === "realtime" && !state.realtimeConfirmed) {
+          return '<div class="notice" style="margin-top:12px;">'
+            + '<strong>' + t("realtimeWarningTitle") + '</strong>'
+            + '<ul style="margin:8px 0 8px 16px;padding:0;font-size:13px;color:#7a4a1a;">'
+            + '<li>' + t("realtimeWarnExperimental") + '</li>'
+            + '<li>' + t("realtimeWarnRestrictions") + '</li>'
+            + '<li>' + t("realtimeWarnRateProtection") + '</li>'
+            + '<li>' + t("realtimeWarnDefaults") + '</li>'
+            + '<li>' + t("realtimeWarnCircuitBreaker") + '</li>'
+            + '<li>' + t("realtimeWarnResponsibility") + '</li>'
+            + '</ul>'
+            + '<label class="checkbox">'
+            + '<input type="checkbox" id="realtime-risk-confirm" />'
+            + t("realtimeRiskConfirm")
+            + '</label>'
+            + '<div class="actions" style="margin-top:10px;">'
+            + '<button class="button secondary" data-action="realtime-confirm" disabled>' + t("confirmRealtimeMode") + '</button>'
+            + '<button class="button secondary" data-action="realtime-cancel">' + t("cancel") + '</button>'
+            + '</div>'
+            + '</div>';
+        }
+        return '<div class="grid" style="margin-top:16px;">'
+          + '<div class="field"><label>' + t("rateLimitMinute") + '</label>'
+          + '<input data-field="realtime.rate_limit_per_minute" value="' + data.realtime.rate_limit_per_minute + '" placeholder="20" />'
+          + '<small>' + t("rateLimitMinuteHelp") + '</small></div>'
+          + '<div class="field"><label>' + t("rateLimitHour") + '</label>'
+          + '<input data-field="realtime.rate_limit_per_hour" value="' + data.realtime.rate_limit_per_hour + '" placeholder="200" />'
+          + '<small>' + t("rateLimitHourHelp") + '</small></div>'
+          + '<div class="field"><label>' + t("rateLimitDay") + '</label>'
+          + '<input data-field="realtime.rate_limit_per_day" value="' + data.realtime.rate_limit_per_day + '" placeholder="1000" />'
+          + '<small>' + t("rateLimitDayHelp") + '</small></div>'
+          + '<div class="field"><label>' + t("minIntervalSec") + '</label>'
+          + '<input data-field="realtime.min_interval_sec" value="' + data.realtime.min_interval_sec + '" placeholder="3.0" />'
+          + '<small>' + t("minIntervalSecHelp") + '</small></div>'
+          + '<div class="field"><label>' + t("mediaExtraDelay") + '</label>'
+          + '<input data-field="realtime.media_extra_delay_sec" value="' + data.realtime.media_extra_delay_sec + '" placeholder="2.0" />'
+          + '<small>' + t("mediaExtraDelayHelp") + '</small></div>'
+          + '<div class="field"><label>' + t("warmupMinutes") + '</label>'
+          + '<input data-field="realtime.warmup_minutes" value="' + data.realtime.warmup_minutes + '" placeholder="5.0" />'
+          + '<small>' + t("warmupMinutesHelp") + '</small></div>'
+          + '<div class="field"><label>' + t("warmupRate") + '</label>'
+          + '<input data-field="realtime.warmup_rate" value="' + data.realtime.warmup_rate + '" placeholder="5" />'
+          + '<small>' + t("warmupRateHelp") + '</small></div>'
+          + '<div class="field"><label>' + t("rtReportInterval") + '</label>'
+          + '<input data-field="realtime.report_interval_minutes" value="' + data.realtime.report_interval_minutes + '" placeholder="120" />'
+          + '<small>' + t("rtReportIntervalHelp") + '</small></div>'
           + '</div>';
       })()}
     </section>
@@ -1414,6 +1885,11 @@ function bindEvents() {
       updateRunnerUI();
       return;
     }
+    if (target.id === "realtime-risk-confirm") {
+      const confirmBtn = document.querySelector('[data-action="realtime-confirm"]');
+      if (confirmBtn) confirmBtn.disabled = !target.checked;
+      return;
+    }
     if (!target.dataset.field) return;
     const field = target.dataset.field;
     let value = target.type === "checkbox" ? target.checked : target.value;
@@ -1431,6 +1907,19 @@ function bindEvents() {
         state.timeFormatParts[unit] = target.value;
         const composed = composeTimeFormat(state.timeFormatParts);
         state.data.display.time_format = composed;
+        render();
+      }
+      return;
+    }
+    if (target.id === "realtime-push-mode") {
+      const newMode = target.value;
+      if (newMode === "realtime") {
+        state.data.realtime.push_mode = "realtime";
+        state.realtimeConfirmed = false;
+        render();
+      } else {
+        state.data.realtime.push_mode = "interval";
+        state.realtimeConfirmed = false;
         render();
       }
       return;
@@ -1562,6 +2051,17 @@ function bindEvents() {
       migrateConfig();
       return;
     }
+    if (action === "realtime-confirm") {
+      state.realtimeConfirmed = true;
+      render();
+      return;
+    }
+    if (action === "realtime-cancel") {
+      state.data.realtime.push_mode = "interval";
+      state.realtimeConfirmed = false;
+      render();
+      return;
+    }
     if (action === "tf-switch-builder") {
       event.preventDefault();
       const parsed = parseTimeFormat(state.data.display.time_format || "");
@@ -1600,6 +2100,11 @@ async function loadConfig() {
     state.status = payload.status || "";
     state.locked = Boolean(payload.locked);
     state.lockMessage = payload.lock_message || "";
+    if (payload.data && payload.data.realtime && payload.data.realtime.push_mode === "realtime") {
+      state.realtimeConfirmed = true;
+    } else {
+      state.realtimeConfirmed = false;
+    }
     const parsedTf = parseTimeFormat((payload.data && payload.data.display && payload.data.display.time_format) || "");
     if (parsedTf) {
       state.timeFormatParts = parsedTf;
@@ -1641,6 +2146,8 @@ async function saveConfig() {
   updateRunnerUI();
 }
 
+document.documentElement.lang = _lang === "zh" ? "zh-CN" : "en";
+document.title = t("title");
 bindEvents();
 render();
 loadConfig();
@@ -2095,6 +2602,11 @@ class _GuiHandler(BaseHTTPRequestHandler):
                 "config.toml not found. Copy config.example.toml and fill it, "
                 "then reload the GUI."
             )
+        data["cloud_sync_warning"] = _detect_cloud_sync(
+            data.get("telegram", {}).get("session_file", ""),
+            data.get("storage", {}).get("db_path", ""),
+            self.server.config_path.parent,
+        )
         payload = {
             "data": data,
             "errors": errors,
@@ -2211,6 +2723,38 @@ class _GuiHandler(BaseHTTPRequestHandler):
         return json.loads(raw.decode("utf-8"))
 
 
+_CLOUD_SYNC_PATTERNS: list[tuple[str, list[str]]] = [
+    ("Dropbox", ["/Dropbox/"]),
+    ("iCloud", ["/Library/Mobile Documents/", "/iCloud/"]),
+    ("OneDrive", ["/OneDrive/"]),
+    ("Google Drive", ["/Google Drive/", "/GoogleDrive/"]),
+]
+
+
+def _detect_cloud_sync(
+    session_file: str,
+    db_path: str,
+    config_dir: Path,
+) -> str:
+    """Return comma-separated cloud service names if data paths sit inside
+    a known cloud sync directory, or empty string if none detected."""
+    paths_to_check: list[str] = []
+    for rel in (session_file, db_path):
+        if not rel:
+            continue
+        resolved = str((config_dir / rel).resolve())
+        paths_to_check.append(resolved)
+    if not paths_to_check:
+        return ""
+    detected: list[str] = []
+    for service, patterns in _CLOUD_SYNC_PATTERNS:
+        for p in paths_to_check:
+            if any(pat in p for pat in patterns):
+                detected.append(service)
+                break
+    return ", ".join(detected)
+
+
 def _load_raw_config(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -2228,6 +2772,7 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     storage = raw.get("storage", {})
     display = raw.get("display", {})
     notifications = raw.get("notifications", {})
+    realtime = raw.get("realtime", {})
 
     api_hash = telegram.get("api_hash")
     data = {
@@ -2264,6 +2809,17 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "display_time_format_units": _TIME_FORMAT_UNITS,
         "notifications": {
             "bark_key": notifications.get("bark_key", ""),
+        },
+        "realtime": {
+            "push_mode": str(realtime.get("push_mode", "interval")).strip().lower(),
+            "rate_limit_per_minute": realtime.get("rate_limit_per_minute", 20),
+            "rate_limit_per_hour": realtime.get("rate_limit_per_hour", 200),
+            "rate_limit_per_day": realtime.get("rate_limit_per_day", 1000),
+            "min_interval_sec": realtime.get("min_interval_sec", 3.0),
+            "media_extra_delay_sec": realtime.get("media_extra_delay_sec", 2.0),
+            "warmup_minutes": realtime.get("warmup_minutes", 5.0),
+            "warmup_rate": realtime.get("warmup_rate", 5),
+            "report_interval_minutes": realtime.get("report_interval_minutes", 120),
         },
     }
 
@@ -2563,6 +3119,48 @@ def _validate_payload(payload: dict[str, Any], raw_existing: dict[str, Any]) -> 
     storage = payload.get("storage", {}) or {}
     display = payload.get("display", {}) or {}
     notifications = payload.get("notifications", {}) or {}
+    realtime_raw = payload.get("realtime", {}) or {}
+
+    push_mode = str(realtime_raw.get("push_mode", "interval")).strip().lower()
+    if push_mode not in ("interval", "realtime"):
+        errors.append("realtime.push_mode must be 'interval' or 'realtime'")
+        push_mode = "interval"
+
+    rt_rate_min = _coerce_int(
+        realtime_raw.get("rate_limit_per_minute", 20),
+        "realtime.rate_limit_per_minute",
+        errors,
+    ) or 20
+    rt_rate_hour = _coerce_int(
+        realtime_raw.get("rate_limit_per_hour", 200),
+        "realtime.rate_limit_per_hour",
+        errors,
+    ) or 200
+    rt_rate_day = _coerce_int(
+        realtime_raw.get("rate_limit_per_day", 1000),
+        "realtime.rate_limit_per_day",
+        errors,
+    ) or 1000
+    rt_warmup_rate = _coerce_int(
+        realtime_raw.get("warmup_rate", 5),
+        "realtime.warmup_rate",
+        errors,
+    ) or 5
+    rt_report_interval = _coerce_int(
+        realtime_raw.get("report_interval_minutes", 120),
+        "realtime.report_interval_minutes",
+        errors,
+    ) or 120
+
+    rt_min_interval = _try_float(realtime_raw.get("min_interval_sec", 3.0))
+    if rt_min_interval is None or rt_min_interval <= 0:
+        rt_min_interval = 3.0
+    rt_media_extra = _try_float(realtime_raw.get("media_extra_delay_sec", 2.0))
+    if rt_media_extra is None or rt_media_extra <= 0:
+        rt_media_extra = 2.0
+    rt_warmup_min = _try_float(realtime_raw.get("warmup_minutes", 5.0))
+    if rt_warmup_min is None or rt_warmup_min <= 0:
+        rt_warmup_min = 5.0
 
     normalized = {
         "config_version": 1.0,
@@ -2605,6 +3203,17 @@ def _validate_payload(payload: dict[str, Any], raw_existing: dict[str, Any]) -> 
         "notifications": {
             "bark_key": str(notifications.get("bark_key", "")).strip(),
         },
+        "realtime": {
+            "push_mode": push_mode,
+            "rate_limit_per_minute": rt_rate_min,
+            "rate_limit_per_hour": rt_rate_hour,
+            "rate_limit_per_day": rt_rate_day,
+            "min_interval_sec": rt_min_interval,
+            "media_extra_delay_sec": rt_media_extra,
+            "warmup_minutes": rt_warmup_min,
+            "warmup_rate": rt_warmup_rate,
+            "report_interval_minutes": rt_report_interval,
+        },
     }
 
     return errors, normalized
@@ -2635,6 +3244,19 @@ def _try_int(value: Any) -> int | None:
         return None
     try:
         return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _try_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+    if value == "":
+        return None
+    try:
+        return float(value)
     except (TypeError, ValueError):
         return None
 
@@ -2720,6 +3342,7 @@ def _render_toml(config: dict[str, Any], raw_existing: dict[str, Any]) -> str:
     reporting = config["reporting"]
     display = config["display"]
     notifications = config["notifications"]
+    realtime = config.get("realtime", {})
 
     lines.extend(
         [
@@ -2740,6 +3363,17 @@ def _render_toml(config: dict[str, Any], raw_existing: dict[str, Any]) -> str:
             "",
             "[notifications]",
             f"bark_key = {toml_string(notifications.get('bark_key', ''))}",
+            "",
+            "[realtime]",
+            f"push_mode = {toml_string(realtime.get('push_mode', 'interval'))}",
+            f"rate_limit_per_minute = {realtime.get('rate_limit_per_minute', 20)}",
+            f"rate_limit_per_hour = {realtime.get('rate_limit_per_hour', 200)}",
+            f"rate_limit_per_day = {realtime.get('rate_limit_per_day', 1000)}",
+            f"min_interval_sec = {realtime.get('min_interval_sec', 3.0)}",
+            f"media_extra_delay_sec = {realtime.get('media_extra_delay_sec', 2.0)}",
+            f"warmup_minutes = {realtime.get('warmup_minutes', 5.0)}",
+            f"warmup_rate = {realtime.get('warmup_rate', 5)}",
+            f"report_interval_minutes = {realtime.get('report_interval_minutes', 120)}",
         ]
     )
 

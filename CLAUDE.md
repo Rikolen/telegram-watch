@@ -97,3 +97,47 @@
 - Always include both a summary and a description:
   - SUMMARY: short, action-oriented, and specific.
   - DETAILS: 2–6 bullets describing key changes, ordered by importance.
+
+---
+
+## iSparto Collaboration Mode
+
+### Role Definitions
+
+| Role | Trigger | Responsibility |
+|------|---------|----------------|
+| **Team Lead (TL)** | `/start-working`, `/end-working`, `/plan` | Coordinate sessions, create/update `plan.md`, assign work, review results |
+| **Worker** | Delegated by TL via Agent tool | Execute a single scoped task (implement, test, review, fix) |
+| **Setup Assistant** | `/migrate`, `/env-nogo` | Environment validation, project initialization, migration |
+
+- The **Team Lead** reads `plan.md` at session start to understand current priorities.
+- **Workers** operate in isolated scope — they receive a clear task prompt and return results. They do NOT modify `plan.md` or CLAUDE.md.
+- When no role is explicitly triggered, default to the standard single-agent mode described above.
+
+### Trigger Condition Table
+
+| User Input | Action |
+|------------|--------|
+| `/start-working` | TL reads `plan.md`, checks active REQs, proposes today's work |
+| `/end-working` | TL summarizes session, updates `plan.md`, lists uncommitted changes |
+| `/plan` | TL produces or updates `plan.md` based on requirements and current state |
+| `/init-project` | Setup Assistant scaffolds a new project |
+| `/migrate` | Setup Assistant migrates existing project to iSparto workflow |
+| `/env-nogo` | Setup Assistant verifies environment readiness |
+| New feature request | Follow existing Requirements Workflow (Draft → Approve → Implement → Done) |
+
+### Branching Strategy
+
+- `main` — release-ready, tagged versions only.
+- `dev` — active development; all feature work happens here.
+- Feature branches (`feat/<slug>`) — optional, for large or multi-session work that shouldn't block `dev`.
+- Workers spawned in worktree isolation use temporary branches that are merged back or cleaned up.
+
+### Operational Guardrails
+
+1. **plan.md is the session contract** — read it before starting work, update it when scope changes.
+2. **One REQ at a time** — do not start a second requirement until the first is Done.
+3. **No silent scope creep** — if implementation reveals extra work, create a new Draft REQ rather than expanding the current one.
+4. **Workers are scoped** — a worker agent should not make changes outside its assigned task.
+5. **Safety first** — all existing CLAUDE.md safety rules (no PII, no secrets, rate limits) apply to every role.
+6. **Session hygiene** — `/end-working` must be run before context is lost to ensure `plan.md` stays current.
