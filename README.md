@@ -15,7 +15,7 @@ Turn noisy Telegram groups into a private, structured signal system — **fully 
 - **Multi-Target Monitoring**: Track multiple groups/channels at once, each with its own watchlist, aliases, and report interval.
 - **Control Group Routing**: Route each target to a specific control group to separate workflows cleanly.
 - **Topic Mapping Per Target**: In forum-mode control groups, map `target_chat_id + user_id` to topic IDs so the same user ID can route differently across source groups.
-- **GUI-First Configuration**: Manage credentials, targets, control groups, mappings, and storage from a local web UI.
+- **GUI-First Configuration**: Manage credentials, targets, control groups, mappings, and storage from a local web UI — auto-detects Chinese or English based on your browser language.
 - **One-Click Local Launcher**: Start with Conda-first (`tgwatch`) setup and automatic `venv` fallback.
 - **GUI Runner Controls**: Run once (with optional target and push), start daemon, stop daemon, and inspect live logs in one place.
 - **Safe Run Guardrails**: Session prechecks, retention confirmation for long windows, and explicit in-UI error feedback.
