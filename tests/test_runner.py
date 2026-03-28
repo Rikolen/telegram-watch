@@ -50,8 +50,8 @@ def build_config(tmp_path: Path) -> Config:
         timezone=timezone.utc,
         retention_days=30,
     )
-    display = DisplayConfig(show_ids=True, time_format="%Y.%m.%d %H:%M:%S (%Z)")
-    notifications = NotificationConfig(bark_key=None)
+    display = DisplayConfig(show_ids=True, time_format="%Y.%m.%d %H:%M:%S (%Z)", language="auto")
+    notifications = NotificationConfig(bark_key=None, heartbeat_interval_minutes=120, check_updates=True)
     return Config(
         config_version=1.0,
         telegram=telegram,
@@ -112,8 +112,8 @@ def build_multi_target_config(tmp_path: Path) -> Config:
         timezone=timezone.utc,
         retention_days=30,
     )
-    display = DisplayConfig(show_ids=True, time_format="%Y.%m.%d %H:%M:%S (%Z)")
-    notifications = NotificationConfig(bark_key=None)
+    display = DisplayConfig(show_ids=True, time_format="%Y.%m.%d %H:%M:%S (%Z)", language="auto")
+    notifications = NotificationConfig(bark_key=None, heartbeat_interval_minutes=120, check_updates=True)
     targets = (target1, target2)
     return Config(
         config_version=1.0,
@@ -600,8 +600,8 @@ async def test_reply_media_caption_uses_target_scoped_alias(monkeypatch, tmp_pat
         timezone=timezone.utc,
         retention_days=30,
     )
-    display = DisplayConfig(show_ids=True, time_format="%Y.%m.%d %H:%M:%S (%Z)")
-    notifications = NotificationConfig(bark_key=None)
+    display = DisplayConfig(show_ids=True, time_format="%Y.%m.%d %H:%M:%S (%Z)", language="auto")
+    notifications = NotificationConfig(bark_key=None, heartbeat_interval_minutes=120, check_updates=True)
     config = Config(
         config_version=1.0,
         telegram=telegram,

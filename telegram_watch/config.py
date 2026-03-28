@@ -76,11 +76,14 @@ class ReportingConfig:
 class DisplayConfig:
     show_ids: bool
     time_format: str
+    language: str  # "auto" | "zh" | "en"
 
 
 @dataclass(frozen=True)
 class NotificationConfig:
     bark_key: str | None
+    heartbeat_interval_minutes: int  # 0 = disabled, default 120
+    check_updates: bool  # default True
 
 
 VALID_PUSH_MODES = ("interval", "realtime")
@@ -115,6 +118,16 @@ class Config:
     display: DisplayConfig
     notifications: NotificationConfig
     realtime: RealtimeConfig
+
+    @property
+    def effective_language(self) -> str:
+        """Resolve 'auto' to actual language based on system locale."""
+        lang = self.display.language
+        if lang != "auto":
+            return lang
+        import locale
+        sys_lang = locale.getdefaultlocale()[0] or "en"
+        return "zh" if sys_lang.startswith("zh") else "en"
 
     @property
     def tracked_users_set(self) -> set[int]:
@@ -599,7 +612,12 @@ def _parse_display(raw: dict[str, Any]) -> DisplayConfig:
     fmt = str(raw.get("time_format", DEFAULT_TIME_FORMAT)).strip()
     if not fmt:
         fmt = DEFAULT_TIME_FORMAT
-    return DisplayConfig(show_ids=show_ids, time_format=fmt)
+    language = str(raw.get("language", "auto")).strip().lower()
+    if language not in ("auto", "zh", "en"):
+        raise ConfigError(
+            f"display.language must be one of 'auto', 'zh', 'en', got '{language}'"
+        )
+    return DisplayConfig(show_ids=show_ids, time_format=fmt, language=language)
 
 
 def _parse_notifications(raw: dict[str, Any]) -> NotificationConfig:
@@ -608,7 +626,18 @@ def _parse_notifications(raw: dict[str, Any]) -> NotificationConfig:
         bark_key = str(bark_key).strip()
         if not bark_key:
             bark_key = None
-    return NotificationConfig(bark_key=bark_key)
+    heartbeat = _require_int(
+        raw.get("heartbeat_interval_minutes", 120),
+        "notifications.heartbeat_interval_minutes",
+    )
+    if heartbeat < 0:
+        raise ConfigError("notifications.heartbeat_interval_minutes must be >= 0")
+    check_updates = _parse_bool(raw.get("check_updates", True))
+    return NotificationConfig(
+        bark_key=bark_key,
+        heartbeat_interval_minutes=heartbeat,
+        check_updates=check_updates,
+    )
 
 
 def _parse_realtime(raw: dict[str, Any]) -> RealtimeConfig:

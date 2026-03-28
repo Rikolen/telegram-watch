@@ -91,6 +91,9 @@ retention_days = 30
 [display]
 show_ids = true
 time_format = "%Y.%m.%d %H:%M:%S (%Z)"
+language = "auto"  # "auto" | "zh" | "en" — controls push message language
 
 [notifications]
 bark_key = ""  # optional Bark key for push notifications
+heartbeat_interval_minutes = 120  # 0 = disable heartbeat
+check_updates = true  # check GitHub for new releases
