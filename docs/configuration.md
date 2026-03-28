@@ -222,7 +222,7 @@ Field | Description | Default
 Field | Description | Default
 ----- | ----------- | -------
 `bark_key` | Optional Bark key for push notifications. When set, reports, heartbeats, and error alerts are mirrored to your phone under the `Telegram Watch` group. | _(empty)_
-`heartbeat_interval_minutes` | Minutes of inactivity before sending a "still running" heartbeat. Set to `0` to disable. | `120`
+`heartbeat_interval_hours` | Hours of inactivity before sending a "still running" heartbeat. Set to `0` to disable. | `2`
 `check_updates` | Automatically check GitHub for new releases every 24 hours and notify control groups. | `true`
 
 ## 11. Validate the configuration

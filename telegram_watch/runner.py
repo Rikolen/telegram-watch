@@ -427,7 +427,7 @@ async def run_daemon(config: Config) -> None:
         summary_loops.append(loop)
 
     heartbeat_loop: _HeartbeatLoop | None = None
-    if config.notifications.heartbeat_interval_minutes > 0:
+    if config.notifications.heartbeat_interval_hours > 0:
         heartbeat_loop = _HeartbeatLoop(
             config, send_client, activity_tracker, fallback_client=fallback_client,
         )
@@ -1328,7 +1328,7 @@ class _HeartbeatLoop:
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._fallback_client = fallback_client
-        idle = config.notifications.heartbeat_interval_minutes * 60
+        idle = config.notifications.heartbeat_interval_hours * 3600
         self._idle_seconds = idle
         self._check_interval = min(300, idle // 4)
 

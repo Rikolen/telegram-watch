@@ -35,7 +35,7 @@
 | 功能 | Config 字段 | 默认值 | 位置 |
 |------|------------|--------|------|
 | 自动更新检查 | `notifications.check_updates` | `true` | `[notifications]` |
-| 心跳间隔 | `notifications.heartbeat_interval_minutes` | `120`（0=关闭） | `[notifications]` |
+| 心跳间隔 | `notifications.heartbeat_interval_hours` | `2`（0=关闭） | `[notifications]` |
 | 推送语言 | `display.language` | `"auto"` | `[display]` |
 
 **实现计划**:
@@ -44,7 +44,7 @@
 
 - [ ] **Worker A: config 层** — `config.py` + `config.example.toml`
   - `DisplayConfig` 加 `language: str`（`"auto"` / `"zh"` / `"en"`）
-  - `NotificationConfig` 加 `heartbeat_interval_minutes: int`、`check_updates: bool`
+  - `NotificationConfig` 加 `heartbeat_interval_hours: int`、`check_updates: bool`
   - `_parse_display()` / `_parse_notifications()` 更新
   - `config.example.toml` 加三个新字段
 
@@ -58,7 +58,7 @@
 #### Phase 2（并行，依赖 Phase 1 完成）
 
 - [ ] **Worker C: runner 集成** — `telegram_watch/runner.py`
-  - `_HeartbeatLoop`：`_IDLE_SECONDS` 改读 `config.notifications.heartbeat_interval_minutes * 60`；为 0 时不启动；消息跟随语言
+  - `_HeartbeatLoop`：`_IDLE_SECONDS` 改读 `config.notifications.heartbeat_interval_hours * 3600`；为 0 时不启动；消息跟随语言
   - 新增 `_UpdateCheckLoop`：启动时检查 + 每 24h 检查；调用 update_checker；推送到所有 control group
   - `run_daemon()` 中初始化两个 loop
 
@@ -86,7 +86,7 @@ class DisplayConfig:
 
 class NotificationConfig:
     bark_key: str | None
-    heartbeat_interval_minutes: int  # 0 = disabled, default 120
+    heartbeat_interval_hours: int  # 0 = disabled, 1-24, default 2
     check_updates: bool  # default True
 
 # update_checker.py 对外接口

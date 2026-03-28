@@ -6,7 +6,7 @@
 
 ## 1.7.0 — 2026-03-27
 - 新增自动更新检查：daemon 启动时及每 24 小时查询 GitHub Releases，新版本最多向所有控制群推送 3 次通知并附 Release 链接（REQ-20260327-001-update-check-heartbeat-language）。
-- 心跳间隔可通过 `notifications.heartbeat_interval_minutes` 配置（默认 120 分钟，设为 0 关闭）。心跳消息跟随语言设置（REQ-20260327-001-update-check-heartbeat-language）。
+- 心跳间隔可通过 `notifications.heartbeat_interval_hours` 配置（默认 2 小时，设为 0 关闭）。心跳消息跟随语言设置（REQ-20260327-001-update-check-heartbeat-language）。
 - 新增 `display.language` 设置（`"auto"` / `"zh"` / `"en"`），控制所有后端推送消息的语言（心跳、更新通知）。GUI 语言切换按钮现同步写入此配置项（REQ-20260327-001-update-check-heartbeat-language）。
 
 ## 1.6.0 — 2026-03-26

@@ -82,7 +82,7 @@ class DisplayConfig:
 @dataclass(frozen=True)
 class NotificationConfig:
     bark_key: str | None
-    heartbeat_interval_minutes: int  # 0 = disabled, default 120
+    heartbeat_interval_hours: int  # 0 = disabled, 1-24, default 2
     check_updates: bool  # default True
 
 
@@ -627,15 +627,15 @@ def _parse_notifications(raw: dict[str, Any]) -> NotificationConfig:
         if not bark_key:
             bark_key = None
     heartbeat = _require_int(
-        raw.get("heartbeat_interval_minutes", 120),
-        "notifications.heartbeat_interval_minutes",
+        raw.get("heartbeat_interval_hours", 2),
+        "notifications.heartbeat_interval_hours",
     )
-    if heartbeat < 0:
-        raise ConfigError("notifications.heartbeat_interval_minutes must be >= 0")
+    if heartbeat < 0 or heartbeat > 24:
+        raise ConfigError("notifications.heartbeat_interval_hours must be 0 (disabled) or 1-24")
     check_updates = _parse_bool(raw.get("check_updates", True))
     return NotificationConfig(
         bark_key=bark_key,
-        heartbeat_interval_minutes=heartbeat,
+        heartbeat_interval_hours=heartbeat,
         check_updates=check_updates,
     )
 

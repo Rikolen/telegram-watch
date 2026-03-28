@@ -95,5 +95,5 @@ language = "auto"  # "auto" | "zh" | "en" — controls push message language
 
 [notifications]
 bark_key = ""  # optional Bark key for push notifications
-heartbeat_interval_minutes = 120  # 0 = disable heartbeat
+heartbeat_interval_hours = 2  # 0 = disable, 1-24
 check_updates = true  # check GitHub for new releases

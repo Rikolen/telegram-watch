@@ -6,7 +6,7 @@
 
 ## 1.7.0 — 2026-03-27
 - Add automatic update checker: daemon queries GitHub Releases on startup and every 24 hours, pushing up to 3 notifications per new version to all control groups with a direct link to the release page (REQ-20260327-001-update-check-heartbeat-language).
-- Make heartbeat interval configurable via `notifications.heartbeat_interval_minutes` (default 120 minutes, set to 0 to disable). Heartbeat message follows the language setting (REQ-20260327-001-update-check-heartbeat-language).
+- Make heartbeat interval configurable via `notifications.heartbeat_interval_hours` (default 2 hours, set to 0 to disable). Heartbeat message follows the language setting (REQ-20260327-001-update-check-heartbeat-language).
 - Add `display.language` setting (`"auto"` / `"zh"` / `"en"`) to control the language of all backend push messages (heartbeat, update notifications). GUI language toggle now syncs to this config field (REQ-20260327-001-update-check-heartbeat-language).
 
 ## 1.6.0 — 2026-03-26

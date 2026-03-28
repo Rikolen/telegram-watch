@@ -615,8 +615,8 @@ const _i18n = {
     languageAuto: "Auto (detect from browser)",
     languageZh: "Chinese",
     languageEn: "English",
-    heartbeatInterval: "Heartbeat Interval (min)",
-    heartbeatIntervalHelp: "Send 'still running' message after this many minutes of inactivity. Set to 0 to disable.",
+    heartbeatInterval: "Heartbeat Interval (hours)",
+    heartbeatIntervalHelp: "Send 'still running' message after this many hours of inactivity. 0 = disabled, max 24.",
     checkUpdates: "Check for Updates",
     checkUpdatesHelp: "Automatically check GitHub for new releases every 24 hours.",
   },
@@ -777,8 +777,8 @@ const _i18n = {
     languageAuto: "自动（跟随浏览器）",
     languageZh: "中文",
     languageEn: "English",
-    heartbeatInterval: "心跳间隔（分钟）",
-    heartbeatIntervalHelp: "空闲超过此时间后发送「仍在运行」消息。设为 0 表示关闭。",
+    heartbeatInterval: "心跳间隔（小时）",
+    heartbeatIntervalHelp: "空闲超过此时间后发送「仍在运行」消息。0 表示关闭，最大 24。",
     checkUpdates: "自动检查更新",
     checkUpdatesHelp: "每 24 小时自动检查 GitHub 是否有新版本。",
   }
@@ -1789,7 +1789,7 @@ function render() {
         </div>
         <div class="field">
           <label>${t("heartbeatInterval")}</label>
-          <input type="number" data-field="notifications.heartbeat_interval_minutes" value="${data.notifications.heartbeat_interval_minutes}" placeholder="120" min="0" />
+          <input type="number" data-field="notifications.heartbeat_interval_hours" value="${data.notifications.heartbeat_interval_hours}" placeholder="2" min="0" max="24" />
           <small>${t("heartbeatIntervalHelp")}</small>
         </div>
         <div class="field">
@@ -2885,7 +2885,7 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "display_time_format_units": _TIME_FORMAT_UNITS,
         "notifications": {
             "bark_key": notifications.get("bark_key", ""),
-            "heartbeat_interval_minutes": notifications.get("heartbeat_interval_minutes", 120),
+            "heartbeat_interval_hours": notifications.get("heartbeat_interval_hours", 2),
             "check_updates": notifications.get("check_updates", True),
         },
         "realtime": {
@@ -3283,14 +3283,14 @@ def _validate_payload(payload: dict[str, Any], raw_existing: dict[str, Any]) -> 
         },
         "notifications": {
             "bark_key": str(notifications.get("bark_key", "")).strip(),
-            "heartbeat_interval_minutes": max(
+            "heartbeat_interval_hours": max(
                 0,
                 _coerce_int(
-                    notifications.get("heartbeat_interval_minutes", 120),
-                    "notifications.heartbeat_interval_minutes",
+                    notifications.get("heartbeat_interval_hours", 2),
+                    "notifications.heartbeat_interval_hours",
                     errors,
                 )
-                or 120,
+                or 2,
             ),
             "check_updates": bool(notifications.get("check_updates", True)),
         },
@@ -3455,7 +3455,7 @@ def _render_toml(config: dict[str, Any], raw_existing: dict[str, Any]) -> str:
             "",
             "[notifications]",
             f"bark_key = {toml_string(notifications.get('bark_key', ''))}",
-            f"heartbeat_interval_minutes = {notifications.get('heartbeat_interval_minutes', 120)}",
+            f"heartbeat_interval_hours = {notifications.get('heartbeat_interval_hours', 2)}",
             f"check_updates = {toml_bool(notifications.get('check_updates', True))}",
             "",
             "[realtime]",

@@ -6,7 +6,7 @@
 
 ## 1.7.0 — 2026-03-27
 - 自動アップデートチェックを追加：daemon 起動時および 24 時間ごとに GitHub Releases を照会し、新バージョンについて最大 3 回の通知をすべてのコントロールグループに送信、リリースリンク付き（REQ-20260327-001-update-check-heartbeat-language）。
-- ハートビート間隔を `notifications.heartbeat_interval_minutes` で設定可能に（デフォルト 120 分、0 で無効化）。ハートビートメッセージは言語設定に従います（REQ-20260327-001-update-check-heartbeat-language）。
+- ハートビート間隔を `notifications.heartbeat_interval_hours` で設定可能に（デフォルト 2 時間、0 で無効化）。ハートビートメッセージは言語設定に従います（REQ-20260327-001-update-check-heartbeat-language）。
 - `display.language` 設定（`"auto"` / `"zh"` / `"en"`）を追加し、すべてのバックエンドプッシュメッセージ（ハートビート、更新通知）の言語を制御。GUI の言語切替ボタンがこの設定に同期されます（REQ-20260327-001-update-check-heartbeat-language）。
 
 ## 1.6.0 — 2026-03-26
