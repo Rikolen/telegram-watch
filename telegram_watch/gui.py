@@ -611,6 +611,14 @@ const _i18n = {
     warmupRateHelp: "Max msgs/min during warmup",
     rtReportInterval: "Report Interval (min)",
     rtReportIntervalHelp: "How often to send periodic summary reports",
+    language: "Language",
+    languageAuto: "Auto (detect from browser)",
+    languageZh: "Chinese",
+    languageEn: "English",
+    heartbeatInterval: "Heartbeat Interval (hours)",
+    heartbeatIntervalHelp: "Send 'still running' message after this many hours of inactivity. 0 = disabled, max 24.",
+    checkUpdates: "Check for Updates",
+    checkUpdatesHelp: "Automatically check GitHub for new releases every 24 hours.",
   },
   zh: {
     badge: "本地配置器",
@@ -765,6 +773,14 @@ const _i18n = {
     warmupRateHelp: "预热期间每分钟最大消息数",
     rtReportInterval: "汇报间隔（分钟）",
     rtReportIntervalHelp: "定期发送汇总报告的频率",
+    language: "语言",
+    languageAuto: "自动（跟随浏览器）",
+    languageZh: "中文",
+    languageEn: "English",
+    heartbeatInterval: "心跳间隔（小时）",
+    heartbeatIntervalHelp: "空闲超过此时间后发送「仍在运行」消息。0 表示关闭，最大 24。",
+    checkUpdates: "自动检查更新",
+    checkUpdatesHelp: "每 24 小时自动检查 GitHub 是否有新版本。",
   }
 };
 
@@ -1763,6 +1779,27 @@ function render() {
           <label>${t("barkKey")}</label>
           <input data-field="notifications.bark_key" value="${data.notifications.bark_key}" placeholder="${t("optional")}" />
         </div>
+        <div class="field">
+          <label>${t("language")}</label>
+          <select data-field="display.language">
+            <option value="auto" ${data.display.language === "auto" ? "selected" : ""}>${t("languageAuto")}</option>
+            <option value="zh" ${data.display.language === "zh" ? "selected" : ""}>${t("languageZh")}</option>
+            <option value="en" ${data.display.language === "en" ? "selected" : ""}>${t("languageEn")}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>${t("heartbeatInterval")}</label>
+          <input type="number" data-field="notifications.heartbeat_interval_hours" value="${data.notifications.heartbeat_interval_hours}" placeholder="2" min="0" max="24" />
+          <small>${t("heartbeatIntervalHelp")}</small>
+        </div>
+        <div class="field">
+          <label>${t("checkUpdates")}</label>
+          <select data-field="notifications.check_updates">
+            <option value="true" ${data.notifications.check_updates ? "selected" : ""}>true</option>
+            <option value="false" ${data.notifications.check_updates ? "" : "selected"}>false</option>
+          </select>
+          <small>${t("checkUpdatesHelp")}</small>
+        </div>
       </div>
       ${(() => {
         const tfUnits = data.display_time_format_units || {};
@@ -1927,6 +1964,19 @@ function bindEvents() {
       }
       return;
     }
+    if (target.dataset && target.dataset.field === "display.language") {
+      const val = target.value;
+      if (val === "auto") {
+        _lang = (navigator.language || "en").startsWith("zh") ? "zh" : "en";
+      } else {
+        _lang = val;
+      }
+      localStorage.setItem("tgwatch_lang", _lang);
+      document.documentElement.lang = _lang === "zh" ? "zh-CN" : "en";
+      document.title = t("title");
+      render();
+      return;
+    }
     if (target.id === "once-target") {
       state.runnerTarget = target.value;
       return;
@@ -2025,6 +2075,9 @@ function bindEvents() {
     if (action === "toggle-lang") {
       _lang = _lang === "zh" ? "en" : "zh";
       localStorage.setItem("tgwatch_lang", _lang);
+      if (state.data) {
+        state.data.display.language = _lang;
+      }
       document.documentElement.lang = _lang === "zh" ? "zh-CN" : "en";
       document.title = t("title");
       render();
@@ -2111,6 +2164,12 @@ async function loadConfig() {
     state.status = payload.status || "";
     state.locked = Boolean(payload.locked);
     state.lockMessage = payload.lock_message || "";
+    if (payload.data.display.language && payload.data.display.language !== "auto") {
+      _lang = payload.data.display.language;
+      localStorage.setItem("tgwatch_lang", _lang);
+      document.documentElement.lang = _lang === "zh" ? "zh-CN" : "en";
+      document.title = t("title");
+    }
     if (payload.data && payload.data.realtime && payload.data.realtime.push_mode === "realtime") {
       state.realtimeConfirmed = true;
     } else {
@@ -2821,10 +2880,13 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "display": {
             "show_ids": display.get("show_ids", True),
             "time_format": display.get("time_format", "%Y.%m.%d %H:%M:%S (%Z)"),
+            "language": display.get("language", "auto"),
         },
         "display_time_format_units": _TIME_FORMAT_UNITS,
         "notifications": {
             "bark_key": notifications.get("bark_key", ""),
+            "heartbeat_interval_hours": notifications.get("heartbeat_interval_hours", 2),
+            "check_updates": notifications.get("check_updates", True),
         },
         "realtime": {
             "push_mode": str(realtime.get("push_mode", "interval")).strip().lower(),
@@ -3215,9 +3277,22 @@ def _validate_payload(payload: dict[str, Any], raw_existing: dict[str, Any]) -> 
             "show_ids": bool(display.get("show_ids", True)),
             "time_format": str(display.get("time_format", "%Y.%m.%d %H:%M:%S (%Z)")).strip()
             or "%Y.%m.%d %H:%M:%S (%Z)",
+            "language": str(display.get("language", "auto")).strip().lower()
+            if str(display.get("language", "auto")).strip().lower() in ("auto", "zh", "en")
+            else "auto",
         },
         "notifications": {
             "bark_key": str(notifications.get("bark_key", "")).strip(),
+            "heartbeat_interval_hours": max(
+                0,
+                _coerce_int(
+                    notifications.get("heartbeat_interval_hours", 2),
+                    "notifications.heartbeat_interval_hours",
+                    errors,
+                )
+                or 2,
+            ),
+            "check_updates": bool(notifications.get("check_updates", True)),
         },
         "realtime": {
             "push_mode": push_mode,
@@ -3376,9 +3451,12 @@ def _render_toml(config: dict[str, Any], raw_existing: dict[str, Any]) -> str:
             "[display]",
             f"show_ids = {toml_bool(display['show_ids'])}",
             f"time_format = {toml_string(display['time_format'])}",
+            f"language = {toml_string(display.get('language', 'auto'))}",
             "",
             "[notifications]",
             f"bark_key = {toml_string(notifications.get('bark_key', ''))}",
+            f"heartbeat_interval_hours = {notifications.get('heartbeat_interval_hours', 2)}",
+            f"check_updates = {toml_bool(notifications.get('check_updates', True))}",
             "",
             "[realtime]",
             f"push_mode = {toml_string(realtime.get('push_mode', 'interval'))}",

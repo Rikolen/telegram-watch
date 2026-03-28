@@ -426,7 +426,18 @@ async def run_daemon(config: Config) -> None:
         loop.start()
         summary_loops.append(loop)
 
-    heartbeat_loop = _HeartbeatLoop(config, send_client, activity_tracker, fallback_client=fallback_client)
+    heartbeat_loop: _HeartbeatLoop | None = None
+    if config.notifications.heartbeat_interval_hours > 0:
+        heartbeat_loop = _HeartbeatLoop(
+            config, send_client, activity_tracker, fallback_client=fallback_client,
+        )
+
+    update_check_loop: _UpdateCheckLoop | None = None
+    if config.notifications.check_updates:
+        update_check_loop = _UpdateCheckLoop(
+            config, send_client, fallback_client=fallback_client,
+        )
+
     control_handler = _ControlHandler(
         config,
         client,
@@ -472,7 +483,10 @@ async def run_daemon(config: Config) -> None:
             except Exception as exc:
                 logger.warning("Failed to send realtime startup message: %s", exc)
 
-    heartbeat_loop.start()
+    if heartbeat_loop is not None:
+        heartbeat_loop.start()
+    if update_check_loop is not None:
+        update_check_loop.start()
     try:
         await _run_with_reconnect(client, send_client, config, fallback_client=fallback_client)
     except Exception as exc:
@@ -481,7 +495,10 @@ async def run_daemon(config: Config) -> None:
     finally:
         if realtime_pusher:
             await realtime_pusher.stop()
-        await heartbeat_loop.stop()
+        if heartbeat_loop is not None:
+            await heartbeat_loop.stop()
+        if update_check_loop is not None:
+            await update_check_loop.stop()
         for loop in summary_loops:
             await loop.stop()
         if sender_client:
@@ -1296,8 +1313,6 @@ class _SummaryLoop:
 
 
 class _HeartbeatLoop:
-    _CHECK_INTERVAL = 300  # seconds
-    _IDLE_SECONDS = 2 * 60 * 60
 
     def __init__(
         self,
@@ -1313,6 +1328,9 @@ class _HeartbeatLoop:
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._fallback_client = fallback_client
+        idle = config.notifications.heartbeat_interval_hours * 3600
+        self._idle_seconds = idle
+        self._check_interval = min(300, idle // 4)
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._run())
@@ -1330,7 +1348,7 @@ class _HeartbeatLoop:
         while not self._stop.is_set():
             try:
                 await asyncio.wait_for(
-                    self._stop.wait(), timeout=self._CHECK_INTERVAL
+                    self._stop.wait(), timeout=self._check_interval
                 )
             except asyncio.TimeoutError:
                 await self._maybe_send_heartbeat()
@@ -1339,24 +1357,101 @@ class _HeartbeatLoop:
 
     async def _maybe_send_heartbeat(self) -> None:
         now = utc_now()
-        if not self.tracker.should_send_heartbeat(now, self._IDLE_SECONDS):
+        if not self.tracker.should_send_heartbeat(now, self._idle_seconds):
             return
+        lang = self.config.effective_language
+        if lang == "zh":
+            msg_text = "\u76d1\u63a7\u4ecd\u5728\u8fd0\u884c\u4e2d"
+            bark_title = "\u76d1\u63a7\u5fc3\u8df3"
+        else:
+            msg_text = "Watcher is still running"
+            bark_title = "Watcher heartbeat"
         try:
             for control in self.config.control_groups.values():
                 await _send_message_with_fallback(
                     self.client,
                     self._fallback_client,
                     control.control_chat_id,
-                    "Watcher is still running",
+                    msg_text,
                 )
             self.tracker.mark_heartbeat(now)
             await send_bark_notification(
                 self.config.notifications,
-                "Watcher heartbeat",
-                "Watcher is still running",
+                bark_title,
+                msg_text,
             )
         except Exception as exc:  # pragma: no cover
             logger.warning("Failed to send heartbeat: %s", exc)
+
+
+class _UpdateCheckLoop:
+    _CHECK_INTERVAL = 24 * 60 * 60  # 24 hours
+
+    def __init__(
+        self,
+        config: Config,
+        client: TelegramClient,
+        *,
+        fallback_client: TelegramClient | None = None,
+    ):
+        self.config = config
+        self.client = client
+        self._fallback_client = fallback_client
+        self._stop = asyncio.Event()
+        self._task: asyncio.Task | None = None
+
+    def start(self) -> None:
+        self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        self._stop.set()
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+    async def _run(self) -> None:
+        # Check immediately on startup
+        await self._check()
+        while not self._stop.is_set():
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=self._CHECK_INTERVAL)
+                break  # stop was set
+            except asyncio.TimeoutError:
+                await self._check()
+
+    async def _check(self) -> None:
+        try:
+            from .update_checker import (
+                check_for_update,
+                should_notify,
+                record_notification,
+                format_notification,
+                get_current_version,
+            )
+
+            current = get_current_version()
+            update = await check_for_update(current)
+            if update is None:
+                return
+            data_dir = self.config.storage.db_path.parent
+            if not should_notify(data_dir, update.latest_version):
+                return
+            lang = self.config.effective_language
+            msg = format_notification(update, lang)
+            for control in self.config.control_groups.values():
+                await _send_message_with_fallback(
+                    self.client,
+                    self._fallback_client,
+                    control.control_chat_id,
+                    msg,
+                )
+            record_notification(data_dir, update.latest_version)
+            logger.info("Update notification sent for v%s", update.latest_version)
+        except Exception:
+            logger.debug("Update check failed; will retry next cycle.", exc_info=True)
 
 
 class _ActivityTracker:

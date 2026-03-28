@@ -215,12 +215,15 @@ Field | Description | Default
 ----- | ----------- | -------
 `show_ids` | Whether control-chat pushes append `(ID)` to aliases/usernames. | `true`
 `time_format` | Timestamp format for control-chat pushes (`strftime` syntax). In GUI, this field is a structured builder with dropdowns for year, month, day, hour, minute, second, date separator, and timezone display; existing non-builder formats are preserved as custom values with a raw text fallback. | `%Y.%m.%d %H:%M:%S (%Z)`
+`language` | Language for push messages: `"auto"` (detect from system locale), `"zh"`, or `"en"`. Also used by the GUI. | `"auto"`
 
 ## 10. Notifications (`[notifications]`)
 
 Field | Description | Default
 ----- | ----------- | -------
 `bark_key` | Optional Bark key for push notifications. When set, reports, heartbeats, and error alerts are mirrored to your phone under the `Telegram Watch` group. | _(empty)_
+`heartbeat_interval_hours` | Hours of inactivity before sending a "still running" heartbeat. Set to `0` to disable. | `2`
+`check_updates` | Automatically check GitHub for new releases every 24 hours and notify control groups. | `true`
 
 ## 11. Validate the configuration
 

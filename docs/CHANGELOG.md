@@ -4,11 +4,14 @@
 
 > Entries are arranged from newest to oldest so the latest release notes stay at the top. Each bullet references the requirement(s) that introduced the change.
 
-## 1.6.0 — 2026-03-26
+## 1.6.0 — 2026-03-27
 - [EXPERIMENTAL] Add real-time push mode: forward tracked messages to the control chat instantly on arrival, with a separate configurable interval for HTML report aggregation. Includes a 7-layer rate protection suite (sliding window, jittered delay, media throttle, hourly/daily caps, exponential backoff, circuit breaker with Bark alerts, and startup warmup) to prevent Telegram account restrictions (REQ-20260320-001-realtime-push-mode).
 - Enable WAL mode and busy_timeout on all SQLite databases (app DB and Telethon session) for cloud-sync resilience. Add automatic retry on transient I/O errors, and warn in `doctor` and GUI when data files reside in cloud-synced directories (REQ-20260321-001-sqlite-wal-retry).
+- Add GUI internationalization (i18n) with auto language detection and manual toggle button; Chinese (zh-CN) or English.
+- Add automatic update checker: daemon queries GitHub Releases on startup and every 24 hours, pushing up to 3 notifications per new version to all control groups (REQ-20260327-001-update-check-heartbeat-language).
+- Make heartbeat interval configurable via `notifications.heartbeat_interval_hours` (default 2 hours, set to 0 to disable). Heartbeat message follows the language setting (REQ-20260327-001-update-check-heartbeat-language).
+- Add `display.language` setting (`"auto"` / `"zh"` / `"en"`) to control the language of all backend push messages (REQ-20260327-001-update-check-heartbeat-language).
 - Suppress repeated experimental-mode warning during GUI status polling.
-- Add GUI internationalization (i18n) with auto language detection: Chinese (zh-CN) when browser locale starts with `zh`, English otherwise.
 
 ## 1.5.0 — 2026-03-11
 - Add per-control-group `skip_html_report` option to send only individual messages without the HTML report file when pushing to the control chat (REQ-20260310-001-skip-html-report-option).

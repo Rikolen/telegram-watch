@@ -4,11 +4,14 @@
 
 > 条目按时间从新到旧排列，最新版本在最上方。每条变更都会标注对应的需求编号。
 
-## 1.6.0 — 2026-03-26
+## 1.6.0 — 2026-03-27
 - [实验性] 新增"即时推送模式"：被追踪用户的消息到达后立即转发至控制群组，HTML 报告按独立周期汇总生成。内置 7 层速率防护体系（滑动窗口限流、随机抖动间隔、媒体额外延迟、每小时/每日上限、指数退避、熔断器 + Bark 告警、启动冷却期），防止 Telegram 账号受到限制（REQ-20260320-001-realtime-push-mode）。
 - 为所有 SQLite 数据库（应用数据库和 Telethon session）启用 WAL 模式和 busy_timeout，提升云同步目录下的稳定性。新增 I/O 错误自动重试机制，doctor 命令和 GUI 检测到数据文件位于云同步目录时输出警告（REQ-20260321-001-sqlite-wal-retry）。
+- GUI 新增国际化（i18n）支持：支持自动检测和手动切换中文/英文界面。
+- 新增自动更新检查：daemon 启动时及每 24 小时查询 GitHub Releases，新版本最多向所有控制群推送 3 次通知并附 Release 链接（REQ-20260327-001-update-check-heartbeat-language）。
+- 心跳间隔可通过 `notifications.heartbeat_interval_hours` 配置（默认 2 小时，设为 0 关闭）。心跳消息跟随语言设置（REQ-20260327-001-update-check-heartbeat-language）。
+- 新增 `display.language` 设置（`"auto"` / `"zh"` / `"en"`），控制所有后端推送消息的语言（REQ-20260327-001-update-check-heartbeat-language）。
 - 修复 GUI 状态轮询时重复打印实验模式警告的问题。
-- GUI 新增国际化（i18n）支持：根据浏览器语言自动切换中文（zh-CN）或英文界面。
 
 ## 1.5.0 — 2026-03-11
 - 新增控制群级别 `skip_html_report` 选项，开启后推送到控制群时仅发送逐条消息，不发送 HTML 报告文件（REQ-20260310-001-skip-html-report-option）。
