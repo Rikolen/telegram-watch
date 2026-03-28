@@ -806,11 +806,13 @@ const _tfLabels = {
   "Slash (/)": "斜杠 (/)",
 };
 
-const _lang = (navigator.language || "en").startsWith("zh") ? "zh" : "en";
-const _strings = _i18n[_lang] || _i18n.en;
+let _lang = localStorage.getItem("tgwatch_lang")
+  || ((navigator.language || "en").startsWith("zh") ? "zh" : "en");
+
+function _getStrings() { return _i18n[_lang] || _i18n.en; }
 
 function t(key) {
-  return _strings[key] || _i18n.en[key] || key;
+  return _getStrings()[key] || _i18n.en[key] || key;
 }
 
 function tf(key, params) {
@@ -1487,6 +1489,7 @@ function render() {
       <div class="actions">
         <button class="button" data-action="save">${t("saveConfig")}</button>
         <button class="button secondary" data-action="reload" data-allow-locked="true">${t("reload")}</button>
+        <button class="button secondary" data-action="toggle-lang" data-allow-locked="true">${_lang === "zh" ? "EN" : "中文"}</button>
       </div>
     </div>
     ${cloudSyncBanner}
@@ -2017,6 +2020,14 @@ function bindEvents() {
     }
     if (action === "reload") {
       loadConfig();
+      return;
+    }
+    if (action === "toggle-lang") {
+      _lang = _lang === "zh" ? "en" : "zh";
+      localStorage.setItem("tgwatch_lang", _lang);
+      document.documentElement.lang = _lang === "zh" ? "zh-CN" : "en";
+      document.title = t("title");
+      render();
       return;
     }
     if (action === "run-once") {
