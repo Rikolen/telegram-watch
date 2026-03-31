@@ -2,7 +2,7 @@
 
 [English](../README.md) | [简体中文](README.zh-Hans.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md)
 
-**文件版本：** `v1.0.6`（release `v1.6.0`）
+**文件版本：** `v1.0.7`（release `v1.6.1`）
 
 追蹤： [X/Twitter](https://x.com/o1xhack) · [Telegram 英文頻道](https://t.me/lalabeng) · [Telegram 中文頻道](https://t.me/o1xinsight)
 
@@ -39,7 +39,7 @@
 複製穩定 release 版本（推薦）：
 
 ```bash
-git clone --branch v1.6.0 https://github.com/o1xhack/telegram-watch.git
+git clone --branch v1.6.1 https://github.com/o1xhack/telegram-watch.git
 cd telegram-watch
 ```
 
@@ -111,7 +111,7 @@ pip install -e .
 **標記版安裝（穩定、版本固定）：**
 
 ```bash
-pip install "git+https://github.com/o1xhack/telegram-watch.git@v1.6.0"
+pip install "git+https://github.com/o1xhack/telegram-watch.git@v1.6.1"
 ```
 
 ### 設定與執行
