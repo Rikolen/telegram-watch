@@ -4,6 +4,9 @@
 
 > Entries are arranged from newest to oldest so the latest release notes stay at the top. Each bullet references the requirement(s) that introduced the change.
 
+## 1.6.1 — 2026-03-30
+- Fix update checker reporting stale version (e.g. 1.0.4 instead of 1.6.0) when package metadata is outdated. Now reads version from pyproject.toml first, falling back to importlib.metadata only in frozen environments.
+
 ## 1.6.0 — 2026-03-27
 - [EXPERIMENTAL] Add real-time push mode: forward tracked messages to the control chat instantly on arrival, with a separate configurable interval for HTML report aggregation. Includes a 7-layer rate protection suite (sliding window, jittered delay, media throttle, hourly/daily caps, exponential backoff, circuit breaker with Bark alerts, and startup warmup) to prevent Telegram account restrictions (REQ-20260320-001-realtime-push-mode).
 - Enable WAL mode and busy_timeout on all SQLite databases (app DB and Telethon session) for cloud-sync resilience. Add automatic retry on transient I/O errors, and warn in `doctor` and GUI when data files reside in cloud-synced directories (REQ-20260321-001-sqlite-wal-retry).
