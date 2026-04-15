@@ -1,5 +1,11 @@
 # WORKFLOW — telegram-watch Requirements & Delivery Process
 
+> **⚠️ DEPRECATED (2026-04-14)** — 本文档描述的 `docs/requests/**` REQ 流程已停用。
+> 新任务流程见 `CLAUDE.md` 的 **Todoist workflow** 章节（`telegram-watch` Todoist 项目 + Board 视图）。
+> 本文件与 `docs/requests/**`、`docs/templates/REQ_TEMPLATE.md` 保留作为历史参考，不再创建新 REQ 文件。迁移依据：`docs/requests/Done/REQ-20260414-001-todoist-workflow-migration.md`。
+
+---
+
 This repository uses a lightweight, file-based requirements workflow designed for Codex CLI execution with minimal repeated prompting.
 
 ## Goals
