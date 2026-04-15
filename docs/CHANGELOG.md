@@ -5,7 +5,7 @@
 > Entries are arranged from newest to oldest so the latest release notes stay at the top. Each bullet references the requirement(s) that introduced the change.
 
 ## 1.7.0 — 2026-04-14
-- Add realtime push message templates with a new `Normal` / `Minimal` layout toggle in Display settings. The Minimal template collapses sender and content onto the first line and moves the time to the second line, while Normal preserves the existing multi-line layout. A live preview in the GUI shows the current layout at a glance. Existing ID display, time format, and language preferences apply on top of the chosen template, and configs missing the new `display.template` key default to `normal` with no migration needed.
+- Add a global message template selector with `Normal` / `Minimal` layouts for individual messages forwarded to the control chat. The selector applies in both interval mode (per-message forwards after each digest) and realtime mode (instant push) — wherever messages appear one-per-Telegram-message in the control chat. Minimal collapses sender and content onto the first line and moves the time to the second line, while Normal preserves the existing multi-line layout. A live preview in the GUI shows the current layout at a glance. Existing ID display, time format, and language preferences apply on top of the chosen template, and configs missing the new `display.template` key default to `normal` with no migration needed.
 - Reorganize the Display & Notifications panel into clearer subgroups — Message Template, Message Fields, Language, and Notifications — so related controls stay together.
 
 ## 1.6.1 — 2026-03-30

@@ -89,7 +89,7 @@ timezone = "UTC"  # e.g., "Asia/Shanghai", "America/Los_Angeles", "America/New_Y
 retention_days = 30
 
 [display]
-template = "normal"  # "normal" | "minimal" — realtime push message layout
+template = "normal"  # "normal" | "minimal" — layout for single messages forwarded to the control chat (applies to both interval and realtime push modes)
 show_ids = true
 time_format = "%Y.%m.%d %H:%M:%S (%Z)"
 language = "auto"  # "auto" | "zh" | "en" — controls push message language
