@@ -594,7 +594,6 @@ async def api_dialogs():
         entity = d.entity
         dialogs.append({
             "id": d.id,
-            "channel_id": f"-100{d.id}" if getattr(entity, "megagroup", False) or getattr(entity, "broadcast", False) else str(d.id),
             "name": d.name,
             "type": type(entity).__name__,
             "unread": d.unread_count,
