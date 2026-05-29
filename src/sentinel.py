@@ -216,14 +216,16 @@ async def _save_companion_json(path: str, meta: dict) -> bool:
 async def _ntfy_push(title: str, message: str, priority: str = "default", tags: str = "") -> None:
     if not NTFY_ENABLED:
         return
-    headers = {"Title": title, "Priority": priority}
+    # Use JSON body so Unicode (emojis) in title/message are handled natively.
+    payload: dict = {"topic": NTFY_TOPIC, "title": title, "message": message, "priority": priority}
     if tags:
-        headers["Tags"] = tags
+        payload["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
+    headers: dict = {"Content-Type": "application/json"}
     if NTFY_TOKEN:
         headers["Authorization"] = f"Bearer {NTFY_TOKEN}"
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            await client.post(f"{NTFY_URL}/{NTFY_TOPIC}", content=message.encode(), headers=headers)
+            await client.post(NTFY_URL, json=payload, headers=headers)
     except Exception as exc:
         log.warning("ntfy error: %s", exc)
 
@@ -231,11 +233,12 @@ async def _ntfy_push(title: str, message: str, priority: str = "default", tags: 
 async def _vikunja_create_task(title: str, description: str) -> None:
     if not VIKUNJA_ENABLED or not VIKUNJA_PROJECT:
         return
-    payload = {"title": title, "description": description, "project_id": VIKUNJA_PROJECT}
+    # Vikunja API: PUT /api/v1/projects/{id}/tasks (POST /api/v1/tasks is the old API)
+    payload = {"title": title, "description": description}
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(
-                f"{VIKUNJA_URL}/api/v1/tasks",
+            r = await client.put(
+                f"{VIKUNJA_URL}/api/v1/projects/{VIKUNJA_PROJECT}/tasks",
                 json=payload,
                 headers={"Authorization": f"Bearer {VIKUNJA_TOKEN}"},
             )
