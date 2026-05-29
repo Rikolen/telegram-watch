@@ -525,6 +525,8 @@ _STATUS_HTML = """\
           style="background:none;border:none;color:#58a6ff;cursor:pointer;padding:0;font-size:.75rem">
     Generar síntesis HTML ahora
   </button>
+  &nbsp;·&nbsp;
+  <a href="/api/dialogs" target="_blank" style="color:#58a6ff;font-size:.75rem">Ver canales disponibles →</a>
 </p>
 </body>
 </html>
@@ -580,6 +582,24 @@ async def api_status():
         "channels": _state["channels"],
         "stats": _state["stats"],
     })
+
+
+@app.get("/api/dialogs")
+async def api_dialogs():
+    """List all channels/groups the account belongs to, with their numeric IDs."""
+    if _telethon_client is None or not _state["connected"]:
+        raise HTTPException(503, "Sentinel not connected")
+    dialogs = []
+    async for d in _telethon_client.iter_dialogs():
+        entity = d.entity
+        dialogs.append({
+            "id": d.id,
+            "channel_id": f"-100{d.id}" if getattr(entity, "megagroup", False) or getattr(entity, "broadcast", False) else str(d.id),
+            "name": d.name,
+            "type": type(entity).__name__,
+            "unread": d.unread_count,
+        })
+    return JSONResponse({"count": len(dialogs), "dialogs": dialogs})
 
 
 @app.post("/api/report")
