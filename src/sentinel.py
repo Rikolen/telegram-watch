@@ -55,6 +55,12 @@ VIKUNJA_ENABLED = os.environ.get("VIKUNJA_ENABLED", "false").lower() == "true" a
 N8N_WEBHOOK_URL = os.environ.get("N8N_WEBHOOK_URL", "")
 N8N_ENABLED     = os.environ.get("N8N_ENABLED", "false").lower() == "true" and bool(N8N_WEBHOOK_URL)
 
+# AI filter — applied at synthesis time to War Room/Cuartel texts (no section detected).
+# Uses Claude to discard noise (chatter, memes, off-topic) and keep trading signals.
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+AI_FILTER_ENABLED = os.environ.get("AI_FILTER_ENABLED", "false").lower() == "true" and bool(ANTHROPIC_API_KEY)
+AI_FILTER_MODEL   = os.environ.get("AI_FILTER_MODEL", "claude-haiku-4-5-20251001")
+
 # Section keyword patterns (case-insensitive, comma-separated)
 LIQUIDEZ_KW   = [k.strip().lower() for k in os.environ.get(
     "LIQUIDEZ_PATTERNS", "liquidez,liquidity,liq"
@@ -393,6 +399,62 @@ def _log_event(event_type: str, filename: str, section: str, note: str) -> None:
         log.warning("log write error: %s", exc)
 
 
+# ── AI filter ──────────────────────────────────────────────────────────────
+
+_AI_FILTER_PROMPT = """\
+You are a crypto trading signal filter. You will receive a numbered list of messages from a traders' chat.
+
+Your task: identify which messages contain RELEVANT trading information.
+
+KEEP (return their index):
+- Price analysis, support/resistance levels, liquidation zones
+- Trade setups, entries, targets, stop-loss levels
+- Market news affecting crypto prices
+- Technical analysis, chart patterns
+- Macro events relevant to crypto
+
+DISCARD (do NOT return their index):
+- Personal conversation, greetings, jokes
+- Memes, GIFs, off-topic content
+- Single emojis or very short reactions
+- Spam or repeated content
+- Content unrelated to crypto/trading
+
+Respond ONLY with a JSON array of the indices to KEEP. Example: [0, 2, 5]
+If none are relevant, respond: []
+"""
+
+async def _ai_filter_cuartel(candidates: list[dict]) -> list[dict]:
+    """Send War Room/Cuartel texts to Claude and return only trading-relevant ones."""
+    if not candidates:
+        return []
+    if not AI_FILTER_ENABLED:
+        return candidates
+
+    import anthropic
+
+    numbered = "\n".join(
+        f"[{i}] {e['text'][:400]}" for i, e in enumerate(candidates)
+    )
+    try:
+        client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        msg = await client.messages.create(
+            model=AI_FILTER_MODEL,
+            max_tokens=256,
+            messages=[{"role": "user", "content": f"{_AI_FILTER_PROMPT}\n\nMessages:\n{numbered}"}],
+        )
+        raw = msg.content[0].text.strip()
+        indices = json.loads(raw)
+        if not isinstance(indices, list):
+            raise ValueError("unexpected response format")
+        kept = [candidates[i] for i in indices if isinstance(i, int) and 0 <= i < len(candidates)]
+        log.info("AI filter: %d/%d Cuartel messages kept", len(kept), len(candidates))
+        return kept
+    except Exception as exc:
+        log.warning("AI filter error (%s) — including all Cuartel messages as fallback", exc)
+        return candidates
+
+
 # ── HTML synthesis ──────────────────────────────────────────────────────────
 
 _HTML_TEMPLATE = """\
@@ -443,15 +505,32 @@ async def generate_html_report(client: TelegramClient) -> Optional[str]:
         except ValueError:
             return False
 
-    events_list = [
+    all_texts = [
         e for e in _state["recent_events"]
         if e.get("type") == "text" and _in_window(e)
     ]
-    if not events_list:
+    if not all_texts:
         return None
 
+    # Separate: always-include vs Cuartel candidates needing AI filter.
+    # Cuartel = strict channel (War Room) + no section detected.
+    always_include = [
+        e for e in all_texts
+        if not (e.get("channel") in STRICT_MEDIA_CHANNELS and not e.get("section"))
+    ]
+    cuartel = [
+        e for e in all_texts
+        if e.get("channel") in STRICT_MEDIA_CHANNELS and not e.get("section")
+    ]
+    filtered_cuartel = await _ai_filter_cuartel(cuartel)
+
+    events_list = sorted(
+        always_include + filtered_cuartel,
+        key=lambda e: e.get("timestamp", ""),
+    )
+
     entries_html = []
-    for e in reversed(events_list[-50:]):
+    for e in events_list[-50:]:
         section = e.get("section") or "general"
         entries_html.append(_ENTRY_TEMPLATE.format(
             section_class=section,
