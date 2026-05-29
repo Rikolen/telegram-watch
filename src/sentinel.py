@@ -32,14 +32,11 @@ API_ID          = int(os.environ["TELEGRAM_API_ID"])
 API_HASH        = os.environ["TELEGRAM_API_HASH"]
 SESSION_FILE    = os.environ.get("TELEGRAM_SESSION_FILE", "/data/telegram.session")
 CHANNELS        = [c.strip() for c in os.environ["TELEGRAM_CHANNELS"].split(",")]
-# Channels allowed to produce media (screenshots + videos).
-# Defaults to CHANNELS if not set. Set to a subset to ignore media from other channels.
-_media_ch_raw   = os.environ.get("MEDIA_CHANNELS", "")
-MEDIA_CHANNELS  = (
-    {c.strip() for c in _media_ch_raw.split(",") if c.strip()}
-    if _media_ch_raw.strip()
-    else set(CHANNELS)
-)
+# Channels that require an explicit section keyword (liquidez/operativa) before
+# saving media. Channels NOT in this set save all media freely.
+# Default: empty (all channels permissive). Set to War Room ID to enforce strict mode.
+_strict_raw        = os.environ.get("STRICT_MEDIA_CHANNELS", "")
+STRICT_MEDIA_CHANNELS = {c.strip() for c in _strict_raw.split(",") if c.strip()}
 
 BRIDGE_URL      = os.environ.get("BRIDGE_URL", "http://btc-panel-backend:3003")
 BRIDGE_ENABLED  = os.environ.get("BRIDGE_ENABLED", "true").lower() == "true"
@@ -270,13 +267,10 @@ async def handle_message(event, channel_id: str) -> None:
     # ── Photo → Liquidez screenshots ─────────────────────────────────────
     if msg.photo or (isinstance(getattr(msg, "media", None), MessageMediaPhoto)):
         log.info("[%s] photo msg=%d section=%s", channel_id, msg.id, section)
-        if channel_id not in MEDIA_CHANNELS:
-            log.debug("[%s] photo skipped — channel not in MEDIA_CHANNELS", channel_id)
+        if channel_id in STRICT_MEDIA_CHANNELS and section != "liquidez":
+            log.debug("[%s] photo skipped — strict channel, section=%s (need liquidez)", channel_id, section)
             return
-        if section != "liquidez":
-            log.debug("[%s] photo skipped — section=%s (need liquidez)", channel_id, section)
-            return
-        actual_section = "liquidez"
+        actual_section = section or "liquidez"
         data = await msg.download_media(bytes)
         if not data:
             log.warning("photo download failed msg=%d", msg.id)
@@ -315,11 +309,8 @@ async def handle_message(event, channel_id: str) -> None:
             return
 
         log.info("[%s] video msg=%d section=%s", channel_id, msg.id, section)
-        if channel_id not in MEDIA_CHANNELS:
-            log.debug("[%s] video skipped — channel not in MEDIA_CHANNELS", channel_id)
-            return
-        if section != "operativa":
-            log.debug("[%s] video skipped — section=%s (need operativa)", channel_id, section)
+        if channel_id in STRICT_MEDIA_CHANNELS and section != "operativa":
+            log.debug("[%s] video skipped — strict channel, section=%s (need operativa)", channel_id, section)
             return
         # Determine filename
         fname = None
