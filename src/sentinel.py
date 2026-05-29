@@ -81,6 +81,7 @@ _state: dict = {
     "status": "starting",
     "connected": False,
     "channels": CHANNELS,
+    "channel_names": {},   # id_str → resolved display name ("🪖 War Room")
     "recent_events": deque(maxlen=500),
     "stats": {"photos": 0, "videos": 0, "reports": 0, "errors": 0, "n8n_triggers": 0},
     # per-channel context window: channel → deque of recent (msg_id, text, section)
@@ -555,10 +556,15 @@ async def index():
     else:
         sc, sl = "warn", "● Conectando…"
 
+    names = _state["channel_names"]
+    channel_display = ", ".join(
+        names.get(ch, ch) for ch in _state["channels"]
+    )
+
     return _STATUS_HTML.format(
         status_class=sc,
         status_label=sl,
-        channels=", ".join(_state["channels"]),
+        channels=channel_display,
         stat_photos=st["photos"],
         stat_videos=st["videos"],
         stat_reports=st["reports"],
@@ -576,10 +582,13 @@ async def health():
 
 @app.get("/api/status")
 async def api_status():
+    names = _state["channel_names"]
     return JSONResponse({
         "status": _state["status"],
         "connected": _state["connected"],
-        "channels": _state["channels"],
+        "channels": [
+            {"id": ch, "name": names.get(ch, ch)} for ch in _state["channels"]
+        ],
         "stats": _state["stats"],
     })
 
@@ -671,12 +680,9 @@ async def run_sentinel():
             ch_id: int | str = int(ch_str) if ch_str.lstrip("-").isdigit() else ch_str
             entity = await client.get_entity(ch_id)
             resolved.append((ch_str, entity))
-            log.info(
-                "Channel resolved: %s → %r (id=%s)",
-                ch_str,
-                getattr(entity, "title", "?"),
-                getattr(entity, "id", "?"),
-            )
+            name = getattr(entity, "title", None) or getattr(entity, "username", None) or ch_str
+            _state["channel_names"][ch_str] = name
+            log.info("Channel resolved: %s → %r (id=%s)", ch_str, name, getattr(entity, "id", "?"))
         except Exception as exc:
             log.error("Cannot resolve channel '%s': %s — skipping", ch_str, exc)
 
