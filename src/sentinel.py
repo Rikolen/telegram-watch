@@ -32,6 +32,14 @@ API_ID          = int(os.environ["TELEGRAM_API_ID"])
 API_HASH        = os.environ["TELEGRAM_API_HASH"]
 SESSION_FILE    = os.environ.get("TELEGRAM_SESSION_FILE", "/data/telegram.session")
 CHANNELS        = [c.strip() for c in os.environ["TELEGRAM_CHANNELS"].split(",")]
+# Channels allowed to produce media (screenshots + videos).
+# Defaults to CHANNELS if not set. Set to a subset to ignore media from other channels.
+_media_ch_raw   = os.environ.get("MEDIA_CHANNELS", "")
+MEDIA_CHANNELS  = (
+    {c.strip() for c in _media_ch_raw.split(",") if c.strip()}
+    if _media_ch_raw.strip()
+    else set(CHANNELS)
+)
 
 BRIDGE_URL      = os.environ.get("BRIDGE_URL", "http://btc-panel-backend:3003")
 BRIDGE_ENABLED  = os.environ.get("BRIDGE_ENABLED", "true").lower() == "true"
@@ -262,32 +270,36 @@ async def handle_message(event, channel_id: str) -> None:
     # ── Photo → Liquidez screenshots ─────────────────────────────────────
     if msg.photo or (isinstance(getattr(msg, "media", None), MessageMediaPhoto)):
         log.info("[%s] photo msg=%d section=%s", channel_id, msg.id, section)
-        if section == "liquidez" or section is None:
-            # Default photos to liquidez if no section detected
-            actual_section = section or "liquidez"
-            data = await msg.download_media(bytes)
-            if not data:
-                log.warning("photo download failed msg=%d", msg.id)
-                return
-            filename = f"liq-{ts}-{msg.id}.jpg"
-            bridge_path = f"/screenshots/{filename}"
-            ok = await _bridge_save_base64(bridge_path, data, "image/jpeg")
-            if ok:
-                _state["stats"]["photos"] += 1
-                note_text = text[:300] if text else f"Liquidez screenshot from channel {channel_id}"
-                companion = {
-                    "type": "screenshot",
-                    "section": actual_section,
-                    "channel": channel_id,
-                    "msg_id": msg.id,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "note": note_text,
-                    "file": filename,
-                }
-                await _save_companion_json(f"/screenshots/{filename}.json", companion)
-                _log_event("photo", filename, actual_section, note_text)
-                await _n8n_trigger("screenshot", {"channel": channel_id, "section": actual_section,
-                                                   "file": filename, "note": note_text})
+        if channel_id not in MEDIA_CHANNELS:
+            log.debug("[%s] photo skipped — channel not in MEDIA_CHANNELS", channel_id)
+            return
+        if section != "liquidez":
+            log.debug("[%s] photo skipped — section=%s (need liquidez)", channel_id, section)
+            return
+        actual_section = "liquidez"
+        data = await msg.download_media(bytes)
+        if not data:
+            log.warning("photo download failed msg=%d", msg.id)
+            return
+        filename = f"liq-{ts}-{msg.id}.jpg"
+        bridge_path = f"/screenshots/{filename}"
+        ok = await _bridge_save_base64(bridge_path, data, "image/jpeg")
+        if ok:
+            _state["stats"]["photos"] += 1
+            note_text = text[:300] if text else f"Liquidez screenshot from channel {channel_id}"
+            companion = {
+                "type": "screenshot",
+                "section": actual_section,
+                "channel": channel_id,
+                "msg_id": msg.id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "note": note_text,
+                "file": filename,
+            }
+            await _save_companion_json(f"/screenshots/{filename}.json", companion)
+            _log_event("photo", filename, actual_section, note_text)
+            await _n8n_trigger("screenshot", {"channel": channel_id, "section": actual_section,
+                                               "file": filename, "note": note_text})
 
     # ── Video/Document → Operativa ──────────────────────────────────────
     elif isinstance(getattr(msg, "media", None), MessageMediaDocument):
@@ -303,6 +315,12 @@ async def handle_message(event, channel_id: str) -> None:
             return
 
         log.info("[%s] video msg=%d section=%s", channel_id, msg.id, section)
+        if channel_id not in MEDIA_CHANNELS:
+            log.debug("[%s] video skipped — channel not in MEDIA_CHANNELS", channel_id)
+            return
+        if section != "operativa":
+            log.debug("[%s] video skipped — section=%s (need operativa)", channel_id, section)
+            return
         # Determine filename
         fname = None
         for attr in getattr(doc, "attributes", []):
