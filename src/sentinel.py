@@ -61,6 +61,9 @@ OPERATIVA_KW  = [k.strip().lower() for k in os.environ.get(
 # Context window: scan last N messages for section header before deciding section
 CONTEXT_WINDOW  = int(os.environ.get("CONTEXT_WINDOW", "5"))
 
+# HTML synthesis window in hours — only include messages from the last N hours
+SYNTHESIS_HOURS = int(os.environ.get("SYNTHESIS_HOURS", "24"))
+
 MEDIA_DIR  = Path(os.environ.get("MEDIA_DIR", "/data/media"))
 LOG_JSONL  = Path(os.environ.get("LOG_JSONL", "/data/sentinel.jsonl"))
 WEB_PORT   = int(os.environ.get("WEB_PORT", "8765"))
@@ -78,7 +81,7 @@ _state: dict = {
     "status": "starting",
     "connected": False,
     "channels": CHANNELS,
-    "recent_events": deque(maxlen=100),
+    "recent_events": deque(maxlen=500),
     "stats": {"photos": 0, "videos": 0, "reports": 0, "errors": 0, "n8n_triggers": 0},
     # per-channel context window: channel → deque of recent (msg_id, text, section)
     "context": {},
@@ -417,8 +420,23 @@ _ENTRY_TEMPLATE = """\
 
 
 async def generate_html_report(client: TelegramClient) -> Optional[str]:
-    """Generate HTML synthesis from recent accumulated text events."""
-    events_list = [e for e in _state["recent_events"] if e.get("type") == "text"]
+    """Generate HTML synthesis from text events within the last SYNTHESIS_HOURS window."""
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=SYNTHESIS_HOURS)
+
+    def _in_window(e: dict) -> bool:
+        ts = e.get("timestamp", "")
+        if not ts:
+            return False
+        try:
+            return datetime.fromisoformat(ts) >= cutoff
+        except ValueError:
+            return False
+
+    events_list = [
+        e for e in _state["recent_events"]
+        if e.get("type") == "text" and _in_window(e)
+    ]
     if not events_list:
         return None
 
@@ -501,8 +519,13 @@ _STATUS_HTML = """\
     {rows}
   </table>
 </div>
-<p style="color:#8b949e;font-size:.75rem">Auto-recarga cada 30s ·
-<a href="/api/report" style="color:#58a6ff">Generar síntesis HTML ahora</a></p>
+<p style="color:#8b949e;font-size:.75rem">
+  Auto-recarga cada 30s · Síntesis: últimas <strong style="color:#c9d1d9">{synthesis_hours}h</strong> ·
+  <button onclick="fetch('/api/report',{{method:'POST'}}).then(r=>r.json()).then(d=>alert(d.ok?'Guardado: '+d.path:d.reason||'sin eventos'))"
+          style="background:none;border:none;color:#58a6ff;cursor:pointer;padding:0;font-size:.75rem">
+    Generar síntesis HTML ahora
+  </button>
+</p>
 </body>
 </html>
 """
@@ -540,6 +563,7 @@ async def index():
         stat_errors=st["errors"],
         stat_n8n=st["n8n_triggers"],
         rows="\n".join(rows) if rows else "<tr><td colspan='4' style='color:#8b949e'>Sin eventos aún</td></tr>",
+        synthesis_hours=SYNTHESIS_HOURS,
     )
 
 
@@ -617,16 +641,42 @@ async def run_sentinel():
     _state["status"] = "running"
     log.info("Telegram connected ✓  account: %s (%s)", me.first_name, me.username)
 
-    for ch in CHANNELS:
-        @client.on(events.NewMessage(chats=ch))
-        async def _handler(event, _ch=ch):
+    # Resolve channel entities before registering handlers.
+    # Telethon cannot resolve numeric string IDs (e.g. "-1003320992862") unless
+    # the entity is cached. Passing the int form to get_entity() populates the
+    # cache, and we then register against the resolved entity object to avoid
+    # "Cannot find any entity" errors on incoming updates.
+    resolved: list[tuple[str, object]] = []
+    for ch_str in CHANNELS:
+        try:
+            ch_id: int | str = int(ch_str) if ch_str.lstrip("-").isdigit() else ch_str
+            entity = await client.get_entity(ch_id)
+            resolved.append((ch_str, entity))
+            log.info(
+                "Channel resolved: %s → %r (id=%s)",
+                ch_str,
+                getattr(entity, "title", "?"),
+                getattr(entity, "id", "?"),
+            )
+        except Exception as exc:
+            log.error("Cannot resolve channel '%s': %s — skipping", ch_str, exc)
+
+    if not resolved:
+        log.error("No channels could be resolved — check vault_telegram_watch_channels and account membership")
+        _state["status"] = "no_channels"
+        await asyncio.sleep(60)
+        raise SystemExit(1)
+
+    for ch_str, entity in resolved:
+        @client.on(events.NewMessage(chats=entity))
+        async def _handler(event, _ch=ch_str):
             try:
                 await handle_message(event, _ch)
             except Exception as exc:
                 log.error("handler error [%s]: %s", _ch, exc, exc_info=True)
                 _state["stats"]["errors"] += 1
 
-    log.info("Listening on channels: %s", CHANNELS)
+    log.info("Listening on %d channel(s): %s", len(resolved), [r[0] for r in resolved])
     await client.run_until_disconnected()
     _state["connected"] = False
     _state["status"] = "disconnected"
