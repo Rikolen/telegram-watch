@@ -522,9 +522,17 @@ async def index():
             f"<td class='{sc}'>{section}</td>"
             f"<td>{(e.get('file') or e.get('note',''))[:80]}</td></tr>"
         )
+    status = _state["status"]
+    if status == "auth_required":
+        sc, sl = "err", "⚠ Auth requerida — ejecutar auth.py"
+    elif ok:
+        sc, sl = "ok", "● Conectado"
+    else:
+        sc, sl = "warn", "● Conectando…"
+
     return _STATUS_HTML.format(
-        status_class="ok" if ok else "err",
-        status_label="● Conectado" if ok else "● Desconectado",
+        status_class=sc,
+        status_label=sl,
         channels=", ".join(_state["channels"]),
         stat_photos=st["photos"],
         stat_videos=st["videos"],
@@ -571,13 +579,43 @@ async def run_sentinel():
     client = TelegramClient(SESSION_FILE, API_ID, API_HASH)
     _telethon_client = client
 
-    log.info("Starting Telegram client · channels: %s", CHANNELS)
+    log.info("Connecting to Telegram · session: %s · channels: %s", SESSION_FILE, CHANNELS)
     _state["status"] = "connecting"
 
-    await client.start()
+    # Use connect() NOT start() — start() is interactive and requires TTY.
+    # If the session is missing or expired the container would crash with EOFError.
+    await client.connect()
+
+    if not await client.is_user_authorized():
+        _state["status"] = "auth_required"
+        log.error(
+            "NOT AUTHORIZED — session missing or expired at '%s'.\n"
+            "Bootstrap interactively on the host:\n"
+            "  docker run --rm -it \\\n"
+            "    -v ~/homelab/apps/telegram-watch/data:/data \\\n"
+            "    -e TELEGRAM_API_ID=%s \\\n"
+            "    -e TELEGRAM_API_HASH=<hash> \\\n"
+            "    -e TELEGRAM_SESSION_FILE=/data/telegram.session \\\n"
+            "    telegram-sentinel:local python auth.py\n"
+            "Then restart the stack.",
+            SESSION_FILE, API_ID,
+        )
+        # Keep alive so the web UI shows auth_required — poll every 30s in case
+        # the user restarts the stack after fixing the session
+        while True:
+            await asyncio.sleep(30)
+            await client.connect()
+            if await client.is_user_authorized():
+                log.info("Session now valid — continuing startup")
+                break
+        # If we reach here, loop again through normal startup path is complex;
+        # just exit so Docker restarts the container with a fresh connect
+        raise SystemExit(0)
+
+    me = await client.get_me()
     _state["connected"] = True
     _state["status"] = "running"
-    log.info("Telegram connected ✓")
+    log.info("Telegram connected ✓  account: %s (%s)", me.first_name, me.username)
 
     for ch in CHANNELS:
         @client.on(events.NewMessage(chats=ch))
@@ -597,14 +635,15 @@ async def run_sentinel():
 async def main():
     import uvicorn
 
-    sentinel_task = asyncio.create_task(run_sentinel())
-
+    # Start uvicorn first so the /health endpoint is reachable even while
+    # the Telethon client is connecting or showing auth_required
     config = uvicorn.Config(app, host=WEB_HOST, port=WEB_PORT, log_level="warning")
     server = uvicorn.Server(config)
+    sentinel_task = asyncio.create_task(run_sentinel())
 
     try:
         await asyncio.gather(sentinel_task, server.serve())
-    except asyncio.CancelledError:
+    except (asyncio.CancelledError, SystemExit):
         pass
     finally:
         if _telethon_client:
