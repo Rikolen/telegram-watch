@@ -50,6 +50,7 @@ NTFY_ENABLED    = os.environ.get("NTFY_ENABLED", "false").lower() == "true" and 
 VIKUNJA_URL     = os.environ.get("VIKUNJA_URL", "")
 VIKUNJA_TOKEN   = os.environ.get("VIKUNJA_TOKEN", "")
 VIKUNJA_PROJECT = int(os.environ.get("VIKUNJA_PROJECT_ID", "0"))
+VIKUNJA_BUCKET  = int(os.environ.get("VIKUNJA_BUCKET_ID", "0")) or None
 VIKUNJA_ENABLED = os.environ.get("VIKUNJA_ENABLED", "false").lower() == "true" and bool(VIKUNJA_URL)
 
 N8N_WEBHOOK_URL = os.environ.get("N8N_WEBHOOK_URL", "")
@@ -234,7 +235,9 @@ async def _vikunja_create_task(title: str, description: str) -> None:
     if not VIKUNJA_ENABLED or not VIKUNJA_PROJECT:
         return
     # Vikunja API: PUT /api/v1/projects/{id}/tasks (POST /api/v1/tasks is the old API)
-    payload = {"title": title, "description": description}
+    payload: dict = {"title": title, "description": description}
+    if VIKUNJA_BUCKET:
+        payload["bucket_id"] = VIKUNJA_BUCKET
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.put(
