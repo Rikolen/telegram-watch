@@ -283,6 +283,9 @@ async def handle_message(event, channel_id: str) -> None:
             log.debug("[%s] photo skipped — strict channel, section=%s (need liquidez)", channel_id, section)
             return
         actual_section = section or "liquidez"
+        note_text = await _get_photo_note(channel_id, text)
+        if note_text is None:
+            return  # no note found — image without context is useless
         data = await msg.download_media(bytes)
         if not data:
             log.warning("photo download failed msg=%d", msg.id)
@@ -292,11 +295,11 @@ async def handle_message(event, channel_id: str) -> None:
         ok = await _bridge_save_base64(bridge_path, data, "image/jpeg")
         if ok:
             _state["stats"]["photos"] += 1
-            note_text = text[:300] if text else f"Liquidez screenshot from channel {channel_id}"
             companion = {
                 "type": "screenshot",
                 "section": actual_section,
                 "channel": channel_id,
+                "channel_name": _state["channel_names"].get(channel_id, channel_id),
                 "msg_id": msg.id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "note": note_text,
@@ -342,11 +345,12 @@ async def handle_message(event, channel_id: str) -> None:
         ok = await _bridge_upload_binary(bridge_path, data, mime or "video/mp4")
         if ok:
             _state["stats"]["videos"] += 1
-            note_text = text[:300] if text else f"Operativa video from channel {channel_id}"
+            note_text = text[:300] if text else ""
             companion = {
                 "type": "video",
                 "section": section or "operativa",
                 "channel": channel_id,
+                "channel_name": _state["channel_names"].get(channel_id, channel_id),
                 "msg_id": msg.id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "note": note_text,
@@ -403,6 +407,60 @@ def _log_event(event_type: str, filename: str, section: str, note: str) -> None:
             f.write(json.dumps(entry) + "\n")
     except Exception as exc:
         log.warning("log write error: %s", exc)
+
+
+# ── Photo note extraction ───────────────────────────────────────────────────
+
+async def _ai_extract_photo_note(context_text: str) -> Optional[str]:
+    """Ask Claude to derive a note from the surrounding context of a photo."""
+    import anthropic
+    prompt = (
+        "A photo was posted in a crypto news/trading channel. "
+        "The nearby text is:\n\n"
+        f'"{context_text}"\n\n'
+        "Write a concise 1-3 sentence note describing what this image is about, "
+        "based on the context. If the text is clearly unrelated to any image "
+        "(e.g. pure off-topic chatter), reply exactly: SKIP\n"
+        "Reply with ONLY the note or SKIP — no preamble."
+    )
+    try:
+        client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        msg = await client.messages.create(
+            model=AI_FILTER_MODEL,
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        result = msg.content[0].text.strip()
+        return None if result.upper() == "SKIP" else result
+    except Exception as exc:
+        log.warning("AI note extraction error: %s — using raw context", exc)
+        return context_text.strip()[:500]
+
+
+async def _get_photo_note(channel_id: str, direct_text: str) -> Optional[str]:
+    """
+    Return the best available note for a photo, or None if no note exists.
+
+    Priority:
+      1. Direct caption on the photo message (>10 chars)
+      2. Most recent text in this channel's context window
+         — if AI enabled, Claude extracts a clean note from it
+      3. None → caller should skip the photo
+    """
+    caption = (direct_text or "").strip()
+    if len(caption) > 10:
+        return caption[:500]
+
+    ctx = _state["context"].get(channel_id, deque())
+    context_texts = [t for _, t, _ in ctx if t and len((t or "").strip()) > 10]
+    if not context_texts:
+        log.info("[%s] photo skipped — no caption and no context available", channel_id)
+        return None
+
+    recent_text = context_texts[0]
+    if AI_FILTER_ENABLED:
+        return await _ai_extract_photo_note(recent_text)
+    return recent_text.strip()[:500]
 
 
 # ── AI filter ──────────────────────────────────────────────────────────────
