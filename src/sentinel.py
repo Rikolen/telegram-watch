@@ -283,7 +283,7 @@ async def handle_message(event, channel_id: str) -> None:
             log.debug("[%s] photo skipped — strict channel, section=%s (need liquidez)", channel_id, section)
             return
         actual_section = section or "liquidez"
-        note_text = await _get_photo_note(channel_id, text)
+        note_text = await _get_photo_note(channel_id, text, actual_section)
         if note_text is None:
             return  # no note found — image without context is useless
         data = await msg.download_media(bytes)
@@ -437,30 +437,40 @@ async def _ai_extract_photo_note(context_text: str) -> Optional[str]:
         return context_text.strip()[:500]
 
 
-async def _get_photo_note(channel_id: str, direct_text: str) -> Optional[str]:
+async def _get_photo_note(channel_id: str, direct_text: str, photo_section: Optional[str]) -> Optional[str]:
     """
     Return the best available note for a photo, or None if no note exists.
 
     Priority:
       1. Direct caption on the photo message (>10 chars)
-      2. Most recent text in this channel's context window
-         — if AI enabled, Claude extracts a clean note from it
-      3. None → caller should skip the photo
+      2. Most recent context text matching the photo's section (e.g. liquidez)
+      3. Most recent context text of any section (fallback)
+         — if AI enabled, Claude validates/extracts a clean note
+      4. None → caller should skip the photo
     """
     caption = (direct_text or "").strip()
     if len(caption) > 10:
         return caption[:500]
 
-    ctx = _state["context"].get(channel_id, deque())
-    context_texts = [t for _, t, _ in ctx if t and len((t or "").strip()) > 10]
-    if not context_texts:
+    ctx = list(_state["context"].get(channel_id, deque()))
+
+    # Prefer context entries that share the photo's section (same topic).
+    if photo_section:
+        section_texts = [t for _, t, s in ctx if s == photo_section and t and len((t or "").strip()) > 10]
+    else:
+        section_texts = []
+
+    # Fall back to any recent non-empty context.
+    any_texts = [t for _, t, _ in ctx if t and len((t or "").strip()) > 10]
+
+    best_text = (section_texts or any_texts or [None])[0]
+    if not best_text:
         log.info("[%s] photo skipped — no caption and no context available", channel_id)
         return None
 
-    recent_text = context_texts[0]
     if AI_FILTER_ENABLED:
-        return await _ai_extract_photo_note(recent_text)
-    return recent_text.strip()[:500]
+        return await _ai_extract_photo_note(best_text)
+    return best_text.strip()[:500]
 
 
 # ── AI filter ──────────────────────────────────────────────────────────────
