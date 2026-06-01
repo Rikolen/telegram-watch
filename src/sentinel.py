@@ -56,11 +56,16 @@ VIKUNJA_ENABLED = os.environ.get("VIKUNJA_ENABLED", "false").lower() == "true" a
 N8N_WEBHOOK_URL = os.environ.get("N8N_WEBHOOK_URL", "")
 N8N_ENABLED     = os.environ.get("N8N_ENABLED", "false").lower() == "true" and bool(N8N_WEBHOOK_URL)
 
-# AI filter — applied at synthesis time to War Room/Cuartel texts (no section detected).
-# Uses Claude to discard noise (chatter, memes, off-topic) and keep trading signals.
+# AI filter (Claude) — text-level synthesis filter for War Room/Cuartel messages.
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 AI_FILTER_ENABLED = os.environ.get("AI_FILTER_ENABLED", "false").lower() == "true" and bool(ANTHROPIC_API_KEY)
 AI_FILTER_MODEL   = os.environ.get("AI_FILTER_MODEL", "claude-haiku-4-5-20251001")
+
+# OpenAI Vision — image-level agent: generates notes from photo content when
+# no text caption or context is available. Uses remaining OpenAI tokens.
+OPENAI_API_KEY       = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_VISION_MODEL  = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini")
+OPENAI_VISION_ENABLED = bool(OPENAI_API_KEY)
 
 # Section keyword patterns (case-insensitive, comma-separated)
 LIQUIDEZ_KW   = [k.strip().lower() for k in os.environ.get(
@@ -93,7 +98,8 @@ _state: dict = {
     "status": "starting",
     "connected": False,
     "channels": CHANNELS,
-    "channel_names": {},   # id_str → resolved display name ("🪖 War Room")
+    "channel_names": {},    # id_str → resolved display name ("🪖 War Room")
+    "channel_entities": {}, # id_str → Telethon entity (for rescan)
     "recent_events": deque(maxlen=500),
     "stats": {"photos": 0, "videos": 0, "reports": 0, "errors": 0, "n8n_triggers": 0},
     # per-channel context window: channel → deque of recent (msg_id, text, section)
@@ -264,8 +270,23 @@ async def _n8n_trigger(event_type: str, payload: dict) -> None:
 
 # ── Telethon event handler ──────────────────────────────────────────────────
 
-async def handle_message(event, channel_id: str) -> None:
-    msg = event.message
+async def _get_sender_name(msg) -> str:
+    """Return display name of message sender (no network if entity is cached)."""
+    # Channel broadcast posts expose post_author directly
+    if getattr(msg, "post_author", None):
+        return msg.post_author
+    try:
+        sender = await msg.get_sender()
+        return (
+            getattr(sender, "username", None)
+            or getattr(sender, "first_name", None)
+            or str(getattr(sender, "id", "?"))
+        )
+    except Exception:
+        return str(getattr(msg, "sender_id", "?") or "?")
+
+
+async def _process_message(msg, channel_id: str) -> None:
     text = msg.text or msg.message or ""
     ts   = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
@@ -284,12 +305,22 @@ async def handle_message(event, channel_id: str) -> None:
             return
         actual_section = section or "liquidez"
         note_text = await _get_photo_note(channel_id, text, actual_section)
-        if note_text is None:
-            return  # no note found — image without context is useless
+
+        # If no text note and vision is available, download image and ask OpenAI
+        if note_text is None and not OPENAI_VISION_ENABLED:
+            log.info("[%s] photo skipped — no note, vision disabled msg=%d", channel_id, msg.id)
+            return
+
         data = await msg.download_media(bytes)
         if not data:
             log.warning("photo download failed msg=%d", msg.id)
             return
+
+        if note_text is None:
+            note_text = await _openai_vision_note(data)
+            if note_text is None:
+                log.info("[%s] photo skipped — vision returned SKIP msg=%d", channel_id, msg.id)
+                return
         filename = f"liq-{ts}-{msg.id}.jpg"
         bridge_path = f"/screenshots/{filename}"
         ok = await _bridge_save_base64(bridge_path, data, "image/jpeg")
@@ -345,7 +376,7 @@ async def handle_message(event, channel_id: str) -> None:
         ok = await _bridge_upload_binary(bridge_path, data, mime or "video/mp4")
         if ok:
             _state["stats"]["videos"] += 1
-            note_text = text[:300] if text else ""
+            note_text = await _get_photo_note(channel_id, text, "operativa") or ""
             companion = {
                 "type": "video",
                 "section": section or "operativa",
@@ -376,20 +407,26 @@ async def handle_message(event, channel_id: str) -> None:
 
     # ── Text message → general crypto news synthesis ──────────────────
     elif text and len(text) > 50:
-        log.debug("[%s] text msg=%d len=%d", channel_id, msg.id, len(text))
-        # Accumulate text messages; synthesis is triggered by schedule or manually via API
+        sender = await _get_sender_name(msg)
+        log.debug("[%s] text msg=%d len=%d sender=%s", channel_id, msg.id, len(text), sender)
         _state["recent_events"].appendleft({
             "type": "text",
             "channel": channel_id,
+            "channel_name": _state["channel_names"].get(channel_id, channel_id),
             "msg_id": msg.id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "section": section,
+            "sender": sender,
             "text": text[:1000],
         })
         if section:
             _log_event("text", f"msg-{msg.id}", section, text[:200])
             await _n8n_trigger("text", {"channel": channel_id, "section": section,
                                         "msg_id": msg.id, "text": text[:500]})
+
+
+async def handle_message(event, channel_id: str) -> None:
+    await _process_message(event.message, channel_id)
 
 
 def _log_event(event_type: str, filename: str, section: str, note: str) -> None:
@@ -435,6 +472,52 @@ async def _ai_extract_photo_note(context_text: str) -> Optional[str]:
     except Exception as exc:
         log.warning("AI note extraction error: %s — using raw context", exc)
         return context_text.strip()[:500]
+
+
+async def _openai_vision_note(image_bytes: bytes) -> Optional[str]:
+    """Send the actual image to OpenAI Vision and get a trading-relevant note.
+    Returns None if the image is not trading-relevant or on API error.
+    Used as fallback when no text caption or context is available.
+    """
+    import base64
+    import openai as _openai
+    b64 = base64.b64encode(image_bytes).decode()
+    try:
+        client = _openai.AsyncOpenAI(api_key=OPENAI_API_KEY)
+        resp = await client.chat.completions.create(
+            model=OPENAI_VISION_MODEL,
+            max_tokens=200,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "This image is from a crypto trading/news Telegram channel.\n"
+                            "Describe in 1-3 concise sentences what it shows "
+                            "(price chart, news headline, trade setup, liquidation map, etc.).\n"
+                            "If the image contains specific prices, levels or ticker symbols, include them.\n"
+                            "If it is clearly off-topic (meme, personal photo, unrelated text), "
+                            "reply exactly: SKIP\n"
+                            "Reply with ONLY the description or SKIP — no preamble."
+                        ),
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"},
+                    },
+                ],
+            }],
+        )
+        result = resp.choices[0].message.content.strip()
+        if result.upper() == "SKIP":
+            log.info("OpenAI vision: image classified as off-topic — skipped")
+            return None
+        log.info("OpenAI vision note: %s", result[:120])
+        return result
+    except Exception as exc:
+        log.warning("OpenAI vision error: %s", exc)
+        return None
 
 
 async def _get_photo_note(channel_id: str, direct_text: str, photo_section: Optional[str]) -> Optional[str]:
@@ -560,7 +643,7 @@ _HTML_TEMPLATE = """\
 
 _ENTRY_TEMPLATE = """\
 <div class="entry {section_class}">
-  <div class="meta">{timestamp} · {channel} · <strong>{section_label}</strong></div>
+  <div class="meta">{timestamp} · <strong>{channel_name}</strong> · {section_label}{sender_part}</div>
   <div class="text">{text}</div>
 </div>"""
 
@@ -606,11 +689,14 @@ async def generate_html_report(client: TelegramClient) -> Optional[str]:
     entries_html = []
     for e in events_list[-50:]:
         section = e.get("section") or "general"
+        sender = e.get("sender", "")
+        sender_part = f" · @{sender}" if sender and sender not in ("?", "None") else ""
         entries_html.append(_ENTRY_TEMPLATE.format(
             section_class=section,
             timestamp=e.get("timestamp", "")[:19].replace("T", " "),
-            channel=e.get("channel", ""),
+            channel_name=e.get("channel_name") or e.get("channel", ""),
             section_label=section.upper(),
+            sender_part=sender_part,
             text=e.get("text", "").replace("<", "&lt;").replace(">", "&gt;"),
         ))
 
@@ -643,6 +729,7 @@ _STATUS_HTML = """\
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="30">
 <title>Telegram Sentinel</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
 <style>
   body {{ font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem;
          background: #0d1117; color: #c9d1d9; }}
@@ -678,7 +765,7 @@ _STATUS_HTML = """\
 <div class="card">
   <div style="margin-bottom:.5rem;font-weight:600">Últimos eventos</div>
   <table>
-    <tr><th>Hora</th><th>Tipo</th><th>Sección</th><th>Archivo / Nota</th></tr>
+    <tr><th>Hora</th><th>Tipo</th><th>Sección</th><th>Usuario</th><th>Archivo / Nota</th></tr>
     {rows}
   </table>
 </div>
@@ -687,6 +774,12 @@ _STATUS_HTML = """\
   <button onclick="fetch('/api/report',{{method:'POST'}}).then(r=>r.json()).then(d=>alert(d.ok?'Guardado: '+d.path:d.reason||'sin eventos'))"
           style="background:none;border:none;color:#58a6ff;cursor:pointer;padding:0;font-size:.75rem">
     Generar síntesis HTML ahora
+  </button>
+  &nbsp;·&nbsp;
+  <button id="rescan-btn"
+          onclick="this.textContent='Escaneando…';fetch('/api/rescan',{{method:'POST'}}).then(r=>r.json()).then(d=>{{this.textContent='↻ Force rescan';alert(d.ok?'Procesados: '+d.processed+' mensajes':d.detail||'error')}}).catch(()=>this.textContent='↻ Force rescan')"
+          style="background:none;border:none;color:#d29922;cursor:pointer;padding:0;font-size:.75rem">
+    ↻ Force rescan
   </button>
   &nbsp;·&nbsp;
   <a href="/api/dialogs" target="_blank" style="color:#58a6ff;font-size:.75rem">Ver canales disponibles →</a>
@@ -704,10 +797,12 @@ async def index():
     for e in list(_state["recent_events"])[:30]:
         section = e.get("section") or "—"
         sc = f"section-{section}" if section in ("liquidez", "operativa") else ""
+        sender = e.get("sender", "") or ""
         rows.append(
             f"<tr><td>{e.get('timestamp','')[:19].replace('T',' ')}</td>"
             f"<td>{e.get('type','')}</td>"
             f"<td class='{sc}'>{section}</td>"
+            f"<td style='color:#8b949e;font-size:.8rem'>{sender[:30]}</td>"
             f"<td>{(e.get('file') or e.get('note',''))[:80]}</td></tr>"
         )
     status = _state["status"]
@@ -732,7 +827,7 @@ async def index():
         stat_reports=st["reports"],
         stat_errors=st["errors"],
         stat_n8n=st["n8n_triggers"],
-        rows="\n".join(rows) if rows else "<tr><td colspan='4' style='color:#8b949e'>Sin eventos aún</td></tr>",
+        rows="\n".join(rows) if rows else "<tr><td colspan='5' style='color:#8b949e'>Sin eventos aún</td></tr>",
         synthesis_hours=SYNTHESIS_HOURS,
     )
 
@@ -781,6 +876,24 @@ async def api_report():
     if path:
         return {"ok": True, "path": path}
     return {"ok": False, "reason": "no text events accumulated yet"}
+
+
+@app.post("/api/rescan")
+async def api_rescan(limit: int = 100):
+    """Fetch the last N messages from each monitored channel and process them."""
+    if _telethon_client is None or not _state["connected"]:
+        raise HTTPException(503, "Sentinel not connected")
+    processed = 0
+    for ch_str, entity in _state["channel_entities"].items():
+        try:
+            async for msg in _telethon_client.iter_messages(entity, limit=limit):
+                await _process_message(msg, ch_str)
+                processed += 1
+        except Exception as exc:
+            log.warning("rescan error for %s: %s", ch_str, exc)
+    log.info("Rescan complete: %d messages processed across %d channels",
+             processed, len(_state["channel_entities"]))
+    return {"ok": True, "processed": processed, "channels": len(_state["channel_entities"])}
 
 
 # ── Main loop ───────────────────────────────────────────────────────────────
@@ -844,6 +957,7 @@ async def run_sentinel():
             resolved.append((ch_str, entity))
             name = getattr(entity, "title", None) or getattr(entity, "username", None) or ch_str
             _state["channel_names"][ch_str] = name
+            _state["channel_entities"][ch_str] = entity
             log.info("Channel resolved: %s → %r (id=%s)", ch_str, name, getattr(entity, "id", "?"))
         except Exception as exc:
             log.error("Cannot resolve channel '%s': %s — skipping", ch_str, exc)
