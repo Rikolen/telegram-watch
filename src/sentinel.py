@@ -79,7 +79,7 @@ MASTERPLAN_KW = [k.strip().lower() for k in os.environ.get(
 ).split(",") if k.strip()]
 
 # Context window: scan last N messages for section header before deciding section
-CONTEXT_WINDOW  = int(os.environ.get("CONTEXT_WINDOW", "5"))
+CONTEXT_WINDOW  = int(os.environ.get("CONTEXT_WINDOW", "20"))
 
 # HTML synthesis window in hours — only include messages from the last N hours
 SYNTHESIS_HOURS = int(os.environ.get("SYNTHESIS_HOURS", "24"))
@@ -107,6 +107,8 @@ _state: dict = {
     "stats": {"photos": 0, "videos": 0, "reports": 0, "errors": 0, "n8n_triggers": 0},
     # per-channel context window: channel → deque of recent (msg_id, text, section)
     "context": {},
+    # processed message IDs — prevents duplicate n8n/ntfy/vikunja on rescan
+    "seen_ids": set(),  # channel:msg_id strings, capped at 10000
 }
 
 
@@ -292,9 +294,22 @@ async def _get_sender_name(msg) -> str:
         return str(getattr(msg, "sender_id", "?") or "?")
 
 
-async def _process_message(msg, channel_id: str) -> None:
+async def _process_message(msg, channel_id: str, notify: bool = True) -> None:
+    """Process one Telegram message.
+
+    notify=False suppresses n8n webhooks, ntfy push, and Vikunja tasks.
+    Used during rescan to replay history without re-firing side-effects.
+    """
+    msg_key = f"{channel_id}:{msg.id}"
+    is_new = msg_key not in _state["seen_ids"]
+    if is_new:
+        _state["seen_ids"].add(msg_key)
+        if len(_state["seen_ids"]) > 10_000:
+            # Evict oldest 1000 — set has no order so just clear excess
+            _state["seen_ids"] = set(list(_state["seen_ids"])[-9_000:])
+
     text = msg.text or msg.message or ""
-    ts   = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    ts   = (msg.date or datetime.now(timezone.utc)).strftime("%Y%m%d-%H%M%S")
 
     # Determine section from message text and context
     direct_section = _detect_section(text)
@@ -349,8 +364,9 @@ async def _process_message(msg, channel_id: str) -> None:
             }
             await _save_companion_json(f"/screenshots/{filename}.json", companion)
             _log_event("photo", filename, actual_section, note_text)
-            await _n8n_trigger("screenshot", {"channel": channel_id, "section": actual_section,
-                                               "file": filename, "note": note_text})
+            if notify and is_new:
+                await _n8n_trigger("screenshot", {"channel": channel_id, "section": actual_section,
+                                                   "file": filename, "note": note_text})
 
     # ── Video/Document → Operativa ──────────────────────────────────────
     elif isinstance(getattr(msg, "media", None), MessageMediaDocument):
@@ -402,19 +418,19 @@ async def _process_message(msg, channel_id: str) -> None:
             await _save_companion_json(f"/videos/{fname}.json", companion)
             _log_event("video", fname, section or "operativa", note_text)
 
-            # ntfy + vikunja on new Operativa video
-            await _ntfy_push(
-                title="📹 Nuevo video Operativa",
-                message=f"{note_text}\n{fname}",
-                priority="high",
-                tags="trading,video",
-            )
-            await _vikunja_create_task(
-                title=f"📹 Revisar: {fname}",
-                description=f"Canal: {channel_id}\n{note_text}\nArchivo: {bridge_path}",
-            )
-            await _n8n_trigger("video", {"channel": channel_id, "section": section or "operativa",
-                                         "file": fname, "note": note_text})
+            if notify and is_new:
+                await _ntfy_push(
+                    title="📹 Nuevo video Operativa",
+                    message=f"{note_text}\n{fname}",
+                    priority="high",
+                    tags="trading,video",
+                )
+                await _vikunja_create_task(
+                    title=f"📹 Revisar: {fname}",
+                    description=f"Canal: {channel_id}\n{note_text}\nArchivo: {bridge_path}",
+                )
+                await _n8n_trigger("video", {"channel": channel_id, "section": section or "operativa",
+                                             "file": fname, "note": note_text})
 
     # ── Text message → general crypto news synthesis ──────────────────
     elif text and len(text) > 50:
@@ -430,7 +446,7 @@ async def _process_message(msg, channel_id: str) -> None:
             "sender": sender,
             "text": text[:1000],
         })
-        if section:
+        if section and notify and is_new:
             _log_event("text", f"msg-{msg.id}", section, text[:200])
             await _n8n_trigger("text", {"channel": channel_id, "section": section,
                                         "msg_id": msg.id, "text": text[:500]})
@@ -891,20 +907,34 @@ async def api_report():
 
 @app.post("/api/rescan")
 async def api_rescan(limit: int = 100):
-    """Fetch the last N messages from each monitored channel and process them."""
+    """Fetch the last N messages from each channel and replay in chronological order.
+
+    Notifications (n8n, ntfy, vikunja) are suppressed — rescan only populates
+    context/media cache without re-firing side-effects for old messages.
+    Already-seen message IDs (seen_ids) are skipped entirely.
+    """
     if _telethon_client is None or not _state["connected"]:
         raise HTTPException(503, "Sentinel not connected")
     processed = 0
+    skipped = 0
     for ch_str, entity in _state["channel_entities"].items():
         try:
+            # Collect first, then reverse to process oldest→newest so context builds up
+            msgs = []
             async for msg in _telethon_client.iter_messages(entity, limit=limit):
-                await _process_message(msg, ch_str)
+                msgs.append(msg)
+            for msg in reversed(msgs):
+                msg_key = f"{ch_str}:{msg.id}"
+                if msg_key in _state["seen_ids"]:
+                    skipped += 1
+                    continue
+                await _process_message(msg, ch_str, notify=False)
                 processed += 1
         except Exception as exc:
             log.warning("rescan error for %s: %s", ch_str, exc)
-    log.info("Rescan complete: %d messages processed across %d channels",
-             processed, len(_state["channel_entities"]))
-    return {"ok": True, "processed": processed, "channels": len(_state["channel_entities"])}
+    log.info("Rescan complete: %d processed, %d skipped (already seen)", processed, skipped)
+    return {"ok": True, "processed": processed, "skipped": skipped,
+            "channels": len(_state["channel_entities"])}
 
 
 # ── Main loop ───────────────────────────────────────────────────────────────
