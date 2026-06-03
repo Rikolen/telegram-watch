@@ -74,6 +74,9 @@ LIQUIDEZ_KW   = [k.strip().lower() for k in os.environ.get(
 OPERATIVA_KW  = [k.strip().lower() for k in os.environ.get(
     "OPERATIVA_PATTERNS", "operativa,operation,op"
 ).split(",") if k.strip()]
+MASTERPLAN_KW = [k.strip().lower() for k in os.environ.get(
+    "MASTERPLAN_PATTERNS", "masterplan,master plan,master"
+).split(",") if k.strip()]
 
 # Context window: scan last N messages for section header before deciding section
 CONTEXT_WINDOW  = int(os.environ.get("CONTEXT_WINDOW", "5"))
@@ -110,8 +113,11 @@ _state: dict = {
 # ── Section detection ───────────────────────────────────────────────────────
 
 def _detect_section(text: str) -> Optional[str]:
-    """Return 'liquidez', 'operativa', or None from message text."""
+    """Return 'masterplan', 'liquidez', 'operativa', or None from message text."""
     t = text.lower()
+    for kw in MASTERPLAN_KW:
+        if kw in t:
+            return "masterplan"
     for kw in OPERATIVA_KW:
         if kw in t:
             return "operativa"
@@ -300,8 +306,8 @@ async def _process_message(msg, channel_id: str) -> None:
     # ── Photo → Liquidez screenshots ─────────────────────────────────────
     if msg.photo or (isinstance(getattr(msg, "media", None), MessageMediaPhoto)):
         log.info("[%s] photo msg=%d section=%s", channel_id, msg.id, section)
-        if channel_id in STRICT_MEDIA_CHANNELS and section != "liquidez":
-            log.debug("[%s] photo skipped — strict channel, section=%s (need liquidez)", channel_id, section)
+        if channel_id in STRICT_MEDIA_CHANNELS and section not in ("liquidez", "masterplan"):
+            log.debug("[%s] photo skipped — strict channel, section=%s (need liquidez/masterplan)", channel_id, section)
             return
         actual_section = section or "liquidez"
         note_text = await _get_photo_note(channel_id, text, actual_section)
@@ -321,8 +327,13 @@ async def _process_message(msg, channel_id: str) -> None:
             if note_text is None:
                 log.info("[%s] photo skipped — vision returned SKIP msg=%d", channel_id, msg.id)
                 return
-        filename = f"liq-{ts}-{msg.id}.jpg"
-        bridge_path = f"/screenshots/{filename}"
+        # Masterplan → /estrategias/,  Liquidez → /screenshots/
+        if actual_section == "masterplan":
+            filename = f"mp-{ts}-{msg.id}.jpg"
+            bridge_path = f"/estrategias/{filename}"
+        else:
+            filename = f"liq-{ts}-{msg.id}.jpg"
+            bridge_path = f"/screenshots/{filename}"
         ok = await _bridge_save_base64(bridge_path, data, "image/jpeg")
         if ok:
             _state["stats"]["photos"] += 1
