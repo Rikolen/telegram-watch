@@ -1,3 +1,5 @@
+> ⚠️ **REPOSITORIO ARCHIVADO** — Migrado a [Forgejo staging](https://forgejo-staging.catriko.xyz/Rikolen/telegram-watch) el 2026-07-16 (Nr.74). GitHub es referencia read-only.
+
 # telegram-watch
 
 [English](README.md) | [简体中文](docs/README.zh-Hans.md) | [繁體中文](docs/README.zh-Hant.md) | [日本語](docs/README.ja.md)
